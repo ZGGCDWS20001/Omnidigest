@@ -1,0 +1,621 @@
+<template>
+  <div class="dashboard">
+    <div v-if="loading" class="loading">Loading dashboard data...</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+    <template v-else>
+      <!-- Overview Stats - First attention layer (5 cards) -->
+      <div class="grid grid-5 fade-in">
+        <div class="stat-card highlight">
+          <div class="stat-icon">📰</div>
+          <div class="stat-content">
+            <div class="label">Total Articles</div>
+            <div class="value">{{ overview.articles?.total || 0 }}</div>
+            <div class="sub">{{ overview.articles?.last_24h || 0 }} in last 24h</div>
+          </div>
+        </div>
+        <div class="stat-card highlight">
+          <div class="stat-icon">🚨</div>
+          <div class="stat-content">
+            <div class="label">Breaking Events</div>
+            <div class="value">{{ overview.breaking_news?.total_events || 0 }}</div>
+            <div class="sub">{{ overview.breaking_news?.pushed || 0 }} pushed</div>
+          </div>
+        </div>
+        <div class="stat-card highlight">
+          <div class="stat-icon">🐦</div>
+          <div class="stat-content">
+            <div class="label">Twitter Tweets</div>
+            <div class="value">{{ overview.twitter?.total_tweets || 0 }}</div>
+            <div class="sub">{{ overview.twitter?.high_impact || 0 }} high impact</div>
+          </div>
+        </div>
+        <div class="stat-card highlight">
+          <div class="stat-icon">📡</div>
+          <div class="stat-content">
+            <div class="label">RSS Sources</div>
+            <div class="value">{{ overview.rss_sources?.enabled || 0 }}</div>
+            <div class="sub">{{ overview.rss_sources?.disabled || 0 }} disabled</div>
+          </div>
+        </div>
+        <div class="stat-card highlight">
+          <div class="stat-icon">💰</div>
+          <div class="stat-content">
+            <div class="label">Today's API Cost</div>
+            <div class="value cost-text">${{ todayCost.toFixed(4) }}</div>
+            <div class="sub">{{ formatNumber(todayInputTokens + todayOutputTokens) }} tokens</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Health - Smaller cards -->
+      <div class="grid grid-3 fade-in" style="margin-top: 16px;">
+        <div class="card system-card-small">
+          <div class="card-header">
+            <h3>🤖 LLM Models</h3>
+            <span class="status-indicator" :class="overview.llm_models?.total_failures > 10 ? 'danger' : 'success'">
+              {{ overview.llm_models?.total_failures > 10 ? 'Issues Detected' : 'Healthy' }}
+            </span>
+          </div>
+          <div class="system-stats">
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #4ade80;">{{ overview.llm_models?.active || 0 }}</span>
+              <span class="system-stat-label">Active</span>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat-value" :style="{ color: overview.llm_models?.total_failures > 10 ? '#ef4444' : 'var(--text-primary)' }">
+                {{ overview.llm_models?.total_failures || 0 }}
+              </span>
+              <span class="system-stat-label">Failures</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card system-card-small">
+          <div class="card-header">
+            <h3>📊 Breaking News</h3>
+            <span class="status-indicator" :class="overview.breaking_news?.active_stories > 0 ? 'warning' : 'success'">
+              {{ overview.breaking_news?.active_stories > 0 ? 'Active Stories' : 'No Active' }}
+            </span>
+          </div>
+          <div class="system-stats">
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #f59e0b;">{{ overview.breaking_news?.active_stories || 0 }}</span>
+              <span class="system-stat-label">Active Stories</span>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #4ade80;">{{ overview.breaking_news?.pushed || 0 }}</span>
+              <span class="system-stat-label">Pushed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card system-card-small">
+          <div class="card-header">
+            <h3>🐦 Twitter Accounts</h3>
+            <span class="status-indicator" :class="overview.twitter_accounts?.error > 0 ? 'warning' : 'success'">
+              {{ overview.twitter_accounts?.error > 0 ? 'Has Issues' : 'Healthy' }}
+            </span>
+          </div>
+          <div class="system-stats">
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #4ade80;">{{ overview.twitter_accounts?.active || 0 }}</span>
+              <span class="system-stat-label">Active</span>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #f59e0b;">{{ overview.twitter_accounts?.cooling || 0 }}</span>
+              <span class="system-stat-label">Cooling</span>
+            </div>
+            <div class="system-stat">
+              <span class="system-stat-value" style="color: #ef4444;">{{ overview.twitter_accounts?.error || 0 }}</span>
+              <span class="system-stat-label">Error</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Events -->
+      <div class="grid grid-2 fade-in" style="margin-top: 16px;">
+        <!-- Breaking Events -->
+        <div class="card events-card">
+          <div class="card-header">
+            <h3>🚨 Recent Breaking Events</h3>
+            <span class="events-count">{{ breakingEvents.length }} events</span>
+          </div>
+          <div class="events-list">
+            <div v-if="breakingEvents.length === 0" class="empty-events">
+              <span class="empty-icon">✨</span>
+              <p>No breaking events in recent 7 days</p>
+            </div>
+            <div v-else class="events-scroll-container">
+              <div class="events-scroll">
+                <div v-for="event in breakingEvents" :key="event.id" class="event-item">
+                  <div class="event-header">
+                    <span class="event-score" :class="getScoreClass(event.impact_score)">
+                      {{ event.impact_score }}
+                    </span>
+                    <span class="event-category">{{ event.category }}</span>
+                    <span class="badge" :class="event.pushed ? 'badge-success' : 'badge-warning'">
+                      {{ event.pushed ? 'Pushed' : 'Pending' }}
+                    </span>
+                  </div>
+                  <div class="event-title">{{ event.event_title }}</div>
+                  <div class="event-time">{{ formatTime(event.created_at) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Twitter Events -->
+        <div class="card events-card">
+          <div class="card-header">
+            <h3>🐦 Recent Twitter Events</h3>
+            <span class="events-count">{{ twitterEvents.length }} events</span>
+          </div>
+          <div class="events-list">
+            <div v-if="twitterEvents.length === 0" class="empty-events">
+              <span class="empty-icon">✨</span>
+              <p>No Twitter events in recent 7 days</p>
+            </div>
+            <div v-else class="events-scroll-container">
+              <div class="events-scroll">
+                <div v-for="event in twitterEvents" :key="event.id" class="event-item">
+                  <div class="event-header">
+                    <span class="event-category">{{ event.category }}</span>
+                    <span class="event-sources">{{ event.source_count }} sources</span>
+                    <span class="badge" :class="event.pushed ? 'badge-success' : 'badge-warning'">
+                      {{ event.pushed ? 'Pushed' : 'Pending' }}
+                    </span>
+                  </div>
+                  <div class="event-title">{{ event.event_title }}</div>
+                  <div class="event-time">{{ formatTime(event.created_at) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script>
+import { ref, onMounted } from 'vue'
+import { statsApi } from '../api'
+import api from '../api'
+
+export default {
+  name: 'Dashboard',
+  setup() {
+    const loading = ref(true)
+    const error = ref(null)
+    const overview = ref({})
+    const breakingEvents = ref([])
+    const twitterEvents = ref([])
+
+    // Today's API cost
+    const todayCost = ref(0)
+    const todayInputTokens = ref(0)
+    const todayOutputTokens = ref(0)
+    const todayCachedTokens = ref(0)
+
+    const loadData = async () => {
+      loading.value = true
+      error.value = null
+      try {
+        const [overviewData, breakingData, twitterData, tokenData] = await Promise.all([
+          statsApi.overview(),
+          statsApi.breaking(7),
+          statsApi.twitter(7),
+          api.get('/token-stats/range?hours=24')
+        ])
+
+        const normalizeCounts = (obj) => {
+          if (!obj) return {}
+          const result = {}
+          for (const key in obj) {
+            result[key] = obj[key] ?? 0
+          }
+          return result
+        }
+
+        overview.value = {
+          ...overviewData,
+          articles: normalizeCounts(overviewData.articles),
+          breaking_news: normalizeCounts(overviewData.breaking_news),
+          twitter: normalizeCounts(overviewData.twitter),
+          rss_sources: normalizeCounts(overviewData.rss_sources),
+          llm_models: normalizeCounts(overviewData.llm_models)
+        }
+        breakingEvents.value = breakingData.stats?.recent_events || []
+        twitterEvents.value = twitterData.stats?.recent_events || []
+
+        // Process today's token cost
+        if (tokenData && tokenData.data) {
+          const data = tokenData.data
+          if (data.total_cost !== undefined) {
+            todayCost.value = data.total_cost || 0
+          }
+          if (data.token_usage && data.token_usage.length > 0) {
+            const total = data.token_usage.reduce((acc, item) => ({
+              input: acc.input + (item.prompt_tokens || 0),
+              output: acc.output + (item.completion_tokens || 0),
+              cached: acc.cached + (item.cached_tokens || 0)
+            }), { input: 0, output: 0, cached: 0 })
+            todayInputTokens.value = total.input
+            todayOutputTokens.value = total.output
+            todayCachedTokens.value = total.cached
+          }
+        }
+      } catch (e) {
+        error.value = e.message || 'Failed to load dashboard data'
+      } finally {
+        loading.value = false
+      }
+    }
+
+    const getScoreClass = (score) => {
+      if (score >= 80) return 'score-high'
+      if (score >= 60) return 'score-medium'
+      return 'score-low'
+    }
+
+    const formatTime = (time) => {
+      if (!time) return '-'
+      const date = new Date(time)
+      return date.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    }
+
+    const formatNumber = (num) => {
+      if (!num) return '0'
+      return num.toLocaleString()
+    }
+
+    onMounted(() => {
+      loadData()
+    })
+
+    return {
+      loading,
+      error,
+      overview,
+      breakingEvents,
+      twitterEvents,
+      // Today's cost
+      todayCost,
+      todayInputTokens,
+      todayOutputTokens,
+      todayCachedTokens,
+      // Methods
+      getScoreClass,
+      formatTime,
+      formatNumber
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* Overview Stats - Highlight cards */
+.stat-card.highlight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.cost-text {
+  color: #4ade80 !important;
+}
+
+.stat-icon {
+  font-size: 32px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-content .label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-content .value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-content .sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* System Cards */
+.system-card {
+  padding: 20px;
+}
+
+.system-card-small {
+  padding: 14px;
+}
+
+.system-card-small .card-header {
+  margin-bottom: 10px;
+}
+
+.system-card-small .card-header h3 {
+  font-size: 14px;
+}
+
+.system-card-small .system-stats {
+  gap: 20px;
+}
+
+.system-card-small .system-stat-value {
+  font-size: 24px;
+}
+
+.system-card-small .system-stat-label {
+  font-size: 11px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.status-indicator {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-indicator.success {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.status-indicator.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.status-indicator.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.system-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.system-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.system-stat-value {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.system-stat-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Events Cards */
+.events-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.events-count {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.events-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* Custom scrollbar */
+.events-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.events-list::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.events-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.events-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.empty-events {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-events p {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.cost-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 20px 0;
+}
+
+.cost-value {
+  font-size: 42px;
+  font-weight: 700;
+  color: #4ade80;
+  margin-bottom: 16px;
+}
+
+.cost-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.cost-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.cost-label {
+  color: var(--text-muted);
+}
+
+.cost-tokens {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Events Scroll Container with Auto-scroll */
+.events-scroll-container {
+  overflow: hidden;
+  height: 400px;
+  position: relative;
+}
+
+.events-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: scroll-events 60s linear infinite;
+}
+
+.events-scroll:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scroll-events {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.events-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.event-item {
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  padding: 14px;
+  transition: transform 0.2s;
+}
+
+.event-item:hover {
+  transform: translateX(4px);
+}
+
+.event-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.event-score {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.score-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.score-medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.score-low {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.event-category {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.event-sources {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.event-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.event-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+</style>

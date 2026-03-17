@@ -1,0 +1,12 @@
+**科技动态综述**
+{{ overview }}
+
+{% for category in categories %}
+### {{ category.emoji }} {{ category.category_name }}
+{% for article in category.articles %}- **[{{ article.chinese_title }}]({{ article.original_url }})**
+{% if article.summary %}  > {{ article.summary | trim | truncate(150, True, '...') | replace('\n', ' ') }}
+{% endif %}
+{% endfor %}
+---
+
+{% endfor %}

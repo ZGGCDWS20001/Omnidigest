@@ -1,0 +1,32 @@
+📊 **A股盘后分析 / 新闻** 📊
+
+**{{ prediction_date }}**
+
+&nbsp;
+
+**📈 预测准确率**: {{ accuracy }}% ({{ correct_count }}/{{ total_count }})
+
+&nbsp;
+
+**🔍 预测 vs 实际**:
+
+{% for idx, data in comparison.items() %}
+- **{% if idx == 'shanghai' %}上证指数{% elif idx == 'shenzhen' %}深证成指{% else %}{{ idx }}{% endif %}**: 预测 {{ data.predicted_direction }} ({{ data.confidence }}%) → 实际 {{ data.actual_change }}%
+{% endfor %}
+
+&nbsp;
+
+**📊 差异分析**:
+
+{{ analysis }}
+
+&nbsp;
+
+**🔑 关键因素**:
+
+{% for factor in key_factors %}
+- {{ factor }}
+{% endfor %}
+
+---
+*由 OmniDigest A股分析引擎自动生成*

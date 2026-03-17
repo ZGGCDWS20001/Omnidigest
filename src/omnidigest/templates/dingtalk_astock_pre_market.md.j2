@@ -1,0 +1,41 @@
+{% if prediction_type == 'pre_market' %}🌅 **A股盘前分析 / 新闻** 🌅
+{% else %}📈 **A股盘中分析 / 新闻** 📈
+{% endif %}
+
+**{{ prediction_date }}**
+
+&nbsp;
+
+**📊 总体情绪**: {{ overall_sentiment }}
+
+&nbsp;
+
+**🔍 关键驱动因素**:
+{% for driver in key_drivers %}
+- {{ driver }}
+{% endfor %}
+
+&nbsp;
+
+---
+
+**📈 上证指数 (Shanghai)**:
+- **走势预测**: {{ shanghai.direction }}
+- **置信度**: {{ shanghai.confidence }}%
+- **分析理由**: {{ shanghai.reason }}
+
+---
+
+**📉 深证指数 (Shenzhen)**:
+- **走势预测**: {{ shenzhen.direction }}
+- **置信度**: {{ shenzhen.confidence }}%
+- **分析理由**: {{ shenzhen.reason }}
+
+---
+
+&nbsp;
+
+**📰 涉及新闻**: {{ news_count }} 条
+
+---
+*由 OmniDigest A股分析引擎自动生成*

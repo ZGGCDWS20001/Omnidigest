@@ -1,0 +1,20 @@
+<b>📊 A股盘后分析 📊</b>━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>📅 {{ prediction_date }}</b>
+
+<b>📈 预测准确率</b>: {{ accuracy }}% ({{ correct_count }}/{{ total_count }})
+
+<b>🔍 预测vs实际</b>:
+{% for idx, data in comparison.items() %}
+• <b>{% if idx == 'shanghai' %}上证指数{% elif idx == 'shenzhen' %}深证成指{% else %}{{ idx }}{% endif %}</b>: 预测{{ data.predicted_direction }} ({{ data.confidence }}%) → 实际 {{ data.actual_change }}%
+{%- endfor %}
+
+<b>📊 差异分析</b>:
+{{ analysis }}
+
+<b>🔑 关键因素</b>:
+{% for factor in key_factors %}
+• {{ factor }}
+{%- endfor %}
+
+<i>由 OmniDigest A股分析引擎自动生成</i>

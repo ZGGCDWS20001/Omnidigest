@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omnidigest"
+version = "2.3.2"
+description = "Automated AI-powered news aggregation, classification, and summarization system with real-time intelligence monitoring"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "OmniDigest Team", email = "contact@omnidigest.example.com"}
+]
+keywords = ["news", "ai", "aggregation", "llm", "rss", "telegram", "dingtalk"]
+dependencies = [
+    "psycopg2-binary>=2.9.0",
+    "feedparser>=6.0.0",
+    "requests>=2.28.0",
+    "apscheduler>=3.9.0",
+    "python-dotenv>=1.0.0",
+    "pydantic-settings>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "newspaper3k>=0.2.8",
+    "lxml>=4.9.0",
+    "lxml_html_clean",
+    "bcrypt>=4.0.0",
+    "instructor>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+]
+
+[project.scripts]
+omnidigest = "omnidigest.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,11 @@
+<b>{{ custom_title_prefix|default('') }}科技动态综述</b>
+{{ overview }}
+
+{% for category in categories %}
+<b>{{ category.emoji }} {{ category.category_name }}</b>
+{% if category.critique %}<i>{{ category.critique }}</i>
+
+{% endif %}
+{% for article in category.articles %}• {{ article.chinese_title }} <a href="{{ article.original_url }}">[阅读原文]</a>
+{% endfor %}
+{% endfor %}

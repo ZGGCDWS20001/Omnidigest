@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # PostgreSQL 数据库
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: omnidigest_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-frank}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-omnidigest}
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - omnidigest_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-frank}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # Redis 缓存服务
+  # ===========================================
+    redis:
+      image: redis:8.6.1
+      container_name: omnidigest_redis
+      restart: always
+      ports:
+        - "6379:6379"
+      volumes:
+        - redis_data:/data
+      networks:
+        - omnidigest_network
+
+  # ===========================================
+  # Dgraph 图数据库
+  # ===========================================
+  dgraph:
+    image: dgraph/standalone:latest
+    container_name: omnidigest_dgraph
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "8180:8080"   # Alpha HTTP
+      - "9080:9080"   # Alpha gRPC
+    volumes:
+      - dgraph_data:/dgraph
+    networks:
+      - omnidigest_network
+
+  dgraph-ratel:
+    image: dgraph/ratel:latest
+    container_name: omnidigest_ratel
+    restart: always
+    ports:
+      - "8000:8000"
+    networks:
+      - omnidigest_network
+
+  # ===========================================
+  # 后端 API 服务
+  # ===========================================
+  omnidigest:
+    image: omnidigest:latest
+    container_name: omnidigest_app
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - TZ=Asia/Shanghai
+      # Docker 网络内服务名 + 端口
+      - DGRAPH_ALPHA_URL=dgraph:9080
+      # Redis 缓存配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_ENABLED=true
+      # 生产环境可设置为 true 禁用定时抓取任务
+      # - DISABLE_SCHEDULER=true
+    volumes:
+      - ./templates:/app/templates
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dgraph:
+        condition: service_started
+    networks:
+      - omnidigest_network
+
+  # ===========================================
+  # 前端 Web 服务
+  # ===========================================
+  frontend:
+    image: omnidigest-frontend:latest
+    container_name: omnidigest_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    networks:
+      - omnidigest_network
+    depends_on:
+      - omnidigest
+
+volumes:
+  postgres_data:
+  dgraph_data:
+  redis_data:
+
+networks:
+  omnidigest_network:
+    driver: bridge
+    name: omnidigest_network
