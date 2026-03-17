@@ -612,4 +612,112 @@ export default {
   color: #ef4444;
   font-size: 11px;
 }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .time-range-selector {
+    flex-wrap: wrap;
+  }
+
+  .time-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .date-range-picker {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .date-input {
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-box {
+    padding: 14px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+
+  .token-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .token-table table {
+    min-width: 600px;
+  }
+
+  .token-table th,
+  .token-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .model-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-box {
+    padding: 12px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+  }
+
+  .token-table table {
+    min-width: 500px;
+  }
+
+  .token-table th,
+  .token-table td {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  .model-card {
+    padding: 14px;
+  }
+
+  .model-name {
+    font-size: 14px;
+  }
+
+  .model-info {
+    font-size: 12px;
+  }
+}
 </style>

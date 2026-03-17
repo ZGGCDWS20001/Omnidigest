@@ -611,4 +611,131 @@ export default {
   color: var(--text-muted);
   margin-bottom: 16px;
 }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .tabs {
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .tab-icon {
+    font-size: 14px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-list {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .source-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .source-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .source-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .source-stats {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .error-text {
+    max-width: 100px;
+  }
+
+  .source-url {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sources-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sources-title {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tabs {
+    padding: 6px;
+  }
+
+  .tab {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .tab-badge {
+    display: none;
+  }
+
+  .add-form {
+    padding: 14px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .source-item {
+    padding: 12px;
+  }
+
+  .source-title {
+    font-size: 14px;
+  }
+
+  .source-url,
+  .source-category {
+    font-size: 12px;
+  }
+
+  .source-stats {
+    padding: 10px 0;
+  }
+
+  .stat-value {
+    font-size: 14px;
+  }
+
+  .error-text {
+    max-width: 80px;
+    font-size: 11px;
+  }
+
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
 </style>

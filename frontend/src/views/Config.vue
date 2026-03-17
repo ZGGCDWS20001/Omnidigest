@@ -245,4 +245,16 @@ export default {
 .btn {
   margin-right: 8px;
 }
+
+@media (max-width: 768px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

@@ -1,6 +1,24 @@
 <template>
-  <div class="app-container">
-    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+  <div class="app-container" :class="{ 'mobile-menu-open': mobileMenuOpen }">
+    <!-- Mobile overlay -->
+    <div class="mobile-overlay" v-if="mobileMenuOpen" @click="mobileMenuOpen = false"></div>
+
+    <!-- Mobile header -->
+    <header class="mobile-header">
+      <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen">
+        <span class="menu-icon">☰</span>
+      </button>
+      <div class="mobile-title">
+        <h2>{{ currentPageTitle }}</h2>
+      </div>
+      <div class="mobile-header-actions">
+        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+          {{ isDark ? '☀️' : '🌙' }}
+        </button>
+      </div>
+    </header>
+
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileMenuOpen }">
       <div class="logo" @click="sidebarCollapsed = !sidebarCollapsed">
         <div class="logo-icon">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
@@ -22,23 +40,23 @@
         </div>
       </div>
       <nav>
-        <router-link to="/" title="Dashboard">
+        <router-link to="/" title="Dashboard" @click="closeMobileMenu">
           <span class="icon">📊</span>
           <span class="nav-text">Dashboard</span>
         </router-link>
-        <router-link to="/knowledge-graph" title="Knowledge Graph">
+        <router-link to="/knowledge-graph" title="Knowledge Graph" @click="closeMobileMenu">
           <span class="icon">🔗</span>
           <span class="nav-text">Knowledge Graph</span>
         </router-link>
-        <router-link to="/config" title="Configuration">
+        <router-link to="/config" title="Configuration" @click="closeMobileMenu">
           <span class="icon">⚙️</span>
           <span class="nav-text">Configuration</span>
         </router-link>
-        <router-link to="/sources" title="RSS Sources">
+        <router-link to="/sources" title="RSS Sources" @click="closeMobileMenu">
           <span class="icon">📰</span>
           <span class="nav-text">RSS Sources</span>
         </router-link>
-        <router-link to="/tokens" title="Token Stats">
+        <router-link to="/tokens" title="Token Stats" @click="closeMobileMenu">
           <span class="icon">💰</span>
           <span class="nav-text">Token Stats</span>
         </router-link>
@@ -50,7 +68,8 @@
       </div>
     </aside>
     <main class="main-content">
-      <header>
+      <!-- Desktop header -->
+      <header class="desktop-header">
         <button class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed" :title="sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'">
           {{ sidebarCollapsed ? '→' : '←' }}
         </button>
@@ -84,6 +103,7 @@ export default {
     const loading = ref(false)
     const isDark = ref(localStorage.getItem('theme') === 'dark')
     const sidebarCollapsed = ref(false)
+    const mobileMenuOpen = ref(false)
 
     const maskedKey = computed(() => {
       if (!apiKey.value) return ''
@@ -103,6 +123,10 @@ export default {
       isDark.value = !isDark.value
       localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
       document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
+    }
+
+    const closeMobileMenu = () => {
+      mobileMenuOpen.value = false
     }
 
     // Apply theme on mount
@@ -128,8 +152,10 @@ export default {
       loading,
       isDark,
       sidebarCollapsed,
+      mobileMenuOpen,
       refreshData,
-      toggleTheme
+      toggleTheme,
+      closeMobileMenu
     }
   }
 }
@@ -284,6 +310,10 @@ header {
   border-bottom: 1px solid var(--border-color);
 }
 
+.desktop-header {
+  display: flex;
+}
+
 .sidebar-toggle {
   background: var(--bg-tertiary);
   border: none;
@@ -330,5 +360,149 @@ header h2 {
   flex: 1;
   padding: 24px;
   overflow-y: auto;
+}
+
+/* Mobile styles */
+.mobile-header {
+  display: none;
+}
+
+.mobile-overlay {
+  display: none;
+}
+
+/* Responsive: Tablet and below */
+@media (max-width: 768px) {
+  .desktop-header {
+    display: none;
+  }
+
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .mobile-menu-btn {
+    background: var(--bg-tertiary);
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  .menu-icon {
+    display: block;
+  }
+
+  .mobile-title {
+    flex: 1;
+  }
+
+  .mobile-title h2 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+  }
+
+  .mobile-header-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mobile-header-actions .theme-toggle {
+    background: var(--bg-tertiary) !important;
+    font-size: 14px;
+    padding: 6px 10px !important;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    width: 240px;
+    transition: left 0.3s ease;
+    padding-top: 20px;
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .sidebar.collapsed {
+    width: 240px;
+    left: -240px;
+  }
+
+  .sidebar.mobile-open.collapsed {
+    left: 0;
+  }
+
+  .sidebar .logo-text,
+  .sidebar .nav-text,
+  .sidebar .api-key-display {
+    opacity: 1;
+    width: auto;
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+
+  .content {
+    padding: 16px;
+  }
+}
+
+/* Responsive: Small mobile */
+@media (max-width: 480px) {
+  .mobile-header {
+    padding: 10px 12px;
+  }
+
+  .mobile-menu-btn {
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+
+  .mobile-title h2 {
+    font-size: 14px;
+  }
+
+  .mobile-header-actions .theme-toggle {
+    font-size: 12px;
+    padding: 5px 8px !important;
+  }
+
+  .content {
+    padding: 12px;
+  }
+}
+
+/* Responsive: Extra small mobile */
+@media (max-width: 375px) {
+  .mobile-header {
+    padding: 8px 10px;
+  }
+
+  .content {
+    padding: 10px;
+  }
 }
 </style>

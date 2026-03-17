@@ -1225,4 +1225,160 @@ export default {
 .toast-icon {
   font-size: 20px;
 }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-item {
+    padding: 14px;
+  }
+
+  .stat-number {
+    font-size: 24px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .entities-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .entity-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .entity-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .entity-title {
+    font-size: 14px;
+  }
+
+  .entity-meta {
+    font-size: 12px;
+  }
+
+  .entity-bar {
+    height: 8px;
+  }
+
+  .entity-bar-fill {
+    height: 100%;
+  }
+
+  .entity-content {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .graph-svg {
+    height: 300px;
+  }
+
+  .graph-preview {
+    min-height: 300px;
+  }
+
+  .graph-empty {
+    height: 300px;
+  }
+
+  .related-entities-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .related-entity-card {
+    padding: 10px;
+  }
+
+  .related-entity-name {
+    font-size: 12px;
+  }
+
+  .related-entity-type {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-item {
+    padding: 12px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .entity-card {
+    padding: 12px;
+  }
+
+  .entity-content {
+    font-size: 12px;
+  }
+
+  .entity-tags {
+    flex-wrap: wrap;
+  }
+
+  .entity-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .graph-svg {
+    height: 250px;
+  }
+
+  .graph-preview {
+    min-height: 250px;
+  }
+
+  .graph-empty {
+    height: 250px;
+    font-size: 14px;
+  }
+
+  .node-label {
+    font-size: 10px;
+  }
+
+  .related-entities-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toast-container {
+    left: 10px;
+    right: 10px;
+  }
+
+  .toast {
+    padding: 10px 12px;
+  }
+}
 </style>
