@@ -10,8 +10,13 @@
 
 <b>📱 相关推文 ({{ event.source_count }}条):</b>
 {% if event.tweet_urls %}
-{% for url in event.tweet_urls.split('\n') %}
-🔗 <a href="{{ url }}">推文 {{ loop.index }}</a>
+{% for item in event.tweet_urls.split('\n') %}
+{% set parts = item.split('|') %}
+{% if parts|length > 1 %}
+🔗 <a href="{{ parts[1] }}">{{ parts[0] }}</a>
+{% else %}
+🔗 <a href="{{ item }}">推文 {{ loop.index }}</a>
+{% endif %}
 {% endfor %}
 {% else %}
 🔗 <a href="https://twitter.com/i/status/{{ event.first_tweet_id }}">查看首条推文</a>

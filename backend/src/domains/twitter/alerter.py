@@ -37,14 +37,25 @@ class TwitterAlerter:
         category = event_data.get('category', 'Unknown')
         summary = event_data.get('summary', '')
         sources = event_data.get('sources', [])
-        tweet_urls = event_data.get('tweet_urls', [])
+        tweet_data = event_data.get('tweet_urls', [])  # List of dicts: {'url': ..., 'text': ...}
 
         # Format sources list
         source_list = [s['author_screen_name'] for s in sources]
         sources_str = ', '.join([f"@{s}" for s in source_list]) if source_list else 'Unknown'
 
-        # Format all tweet URLs
-        tweet_urls_str = '\n'.join(tweet_urls) if tweet_urls else ''
+        # Format all tweet URLs with titles
+        tweet_urls_list = []
+        for item in tweet_data:
+            if isinstance(item, dict):
+                url = item.get('url', '')
+                text = item.get('text', '')[:50]  # Truncate text for display
+                if text:
+                    tweet_urls_list.append(f"{text}...|{url}")
+                else:
+                    tweet_urls_list.append(url)
+            else:
+                tweet_urls_list.append(str(item))
+        tweet_urls_str = '\n'.join(tweet_urls_list) if tweet_urls_list else ''
 
         title = f"🔴 [新闻] 推特事件聚合: {source_count}个来源报道 (分类: {category})"
         payload = {

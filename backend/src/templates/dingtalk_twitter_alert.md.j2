@@ -13,8 +13,13 @@
 
 **📱 相关推文 ({{ event.source_count }}条):**
 {% if event.tweet_urls %}
-{% for url in event.tweet_urls.split('\n') %}
-🔗 [推文 {{ loop.index }}]({{ url }})
+{% for item in event.tweet_urls.split('\n') %}
+{% set parts = item.split('|') %}
+{% if parts|length > 1 %}
+🔗 [{{ parts[0] }}]({{ parts[1] }})
+{% else %}
+🔗 [推文 {{ loop.index }}]({{ item }})
+{% endif %}
 {% endfor %}
 {% else %}
 🔗 [查看首条推文](https://twitter.com/i/status/{{ event.first_tweet_id }})

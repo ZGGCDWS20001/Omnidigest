@@ -403,13 +403,13 @@ class TwitterDbMixin:
             logger.error(f"Error getting tweet sources for event {event_id}: {e}")
             return []
 
-    def get_twitter_event_tweet_urls(self, event_id: str, limit: int = 20) -> List[str]:
+    def get_twitter_event_tweet_urls(self, event_id: str, limit: int = 20) -> List[Dict]:
         """
-        Gets all tweet URLs for an event.
-        获取事件的所有推文链接。
+        Gets all tweet URLs and text for an event.
+        获取事件的所有推文链接和内容。
         """
         query = """
-        SELECT r.tweet_url
+        SELECT r.tweet_url, r.text
         FROM twitter_event_tweet_mapping m
         JOIN twitter_stream_raw r ON r.tweet_id = m.tweet_id
         WHERE m.event_id = %s
@@ -421,7 +421,7 @@ class TwitterDbMixin:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute(query, (event_id, limit))
                     results = cur.fetchall()
-                    return [r['tweet_url'] for r in results if r.get('tweet_url')]
+                    return [{'url': r['tweet_url'], 'text': r.get('text', '')} for r in results if r.get('tweet_url')]
         except Exception as e:
             logger.error(f"Error getting tweet URLs for event {event_id}: {e}")
             return []
