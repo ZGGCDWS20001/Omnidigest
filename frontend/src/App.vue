@@ -1,5 +1,23 @@
 <template>
   <div class="app-container" :class="{ 'mobile-menu-open': mobileMenuOpen }">
+    <!-- API Key Modal -->
+    <div v-if="showApiKeyModal" class="modal-overlay" @click.self="closeApiKeyModal">
+      <div class="modal-content">
+        <h3>{{ apiKeyModalTitle }}</h3>
+        <input
+          v-model="apiKeyInput"
+          type="text"
+          placeholder="Enter API key (format: client_name:key)"
+          class="modal-input"
+          @keyup.enter="submitApiKey"
+        />
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="closeApiKeyModal">Cancel</button>
+          <button class="btn-confirm" @click="submitApiKey">Submit</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Mobile overlay -->
     <div class="mobile-overlay" v-if="mobileMenuOpen" @click="mobileMenuOpen = false"></div>
 
@@ -105,6 +123,45 @@ export default {
     const sidebarCollapsed = ref(false)
     const mobileMenuOpen = ref(false)
 
+    // Modal state
+    const showApiKeyModal = ref(false)
+    const apiKeyModalTitle = ref('Please enter your API key:')
+    const apiKeyInput = ref('')
+    const apiKeyCallback = ref(null)
+
+    const openApiKeyModal = (title = 'Please enter your API key:', callback = null) => {
+      apiKeyModalTitle.value = title
+      apiKeyInput.value = ''
+      apiKeyCallback.value = callback
+      showApiKeyModal.value = true
+    }
+
+    const closeApiKeyModal = () => {
+      showApiKeyModal.value = false
+      apiKeyInput.value = ''
+      apiKeyCallback.value = null
+    }
+
+    const submitApiKey = () => {
+      if (apiKeyInput.value) {
+        apiKey.value = apiKeyInput.value
+        localStorage.setItem('api_key', apiKeyInput.value)
+        if (apiKeyCallback.value) {
+          apiKeyCallback.value(apiKeyInput.value)
+        } else {
+          window.location.reload()
+        }
+      }
+      closeApiKeyModal()
+    }
+
+    // Listen for API key required event
+    const handleApiKeyRequired = (event) => {
+      openApiKeyModal(event.detail?.message || 'API Key Required', (key) => {
+        window.location.reload()
+      })
+    }
+
     const maskedKey = computed(() => {
       if (!apiKey.value) return ''
       return apiKey.value.substring(0, 8) + '...' + apiKey.value.substring(apiKey.value.length - 4)
@@ -131,12 +188,11 @@ export default {
 
     // Apply theme on mount
     onMounted(() => {
+      // Listen for API key required event from axios interceptor
+      window.addEventListener('api-key-required', handleApiKeyRequired)
+
       if (!apiKey.value) {
-        const key = prompt('Please enter your API key:')
-        if (key) {
-          apiKey.value = key
-          localStorage.setItem('api_key', key)
-        }
+        openApiKeyModal()
       }
       // Apply saved theme
       if (isDark.value) {
@@ -155,7 +211,13 @@ export default {
       mobileMenuOpen,
       refreshData,
       toggleTheme,
-      closeMobileMenu
+      closeMobileMenu,
+      // Modal
+      showApiKeyModal,
+      apiKeyModalTitle,
+      apiKeyInput,
+      closeApiKeyModal,
+      submitApiKey
     }
   }
 }
@@ -166,6 +228,75 @@ export default {
   display: flex;
   height: 100vh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-cancel {
+  background: var(--bg-tertiary);
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.btn-confirm {
+  background: #4ade80;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .sidebar {

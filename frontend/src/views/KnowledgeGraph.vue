@@ -424,7 +424,7 @@ export default {
           buildGraphFromRelations(response.relations)
         }
       } catch (e) {
-        console.error('Load graph error:', e)
+        // Handle error silently
       }
     }
 
@@ -557,7 +557,6 @@ export default {
           }
         }
       } catch (e) {
-        console.error('Search error:', e)
         toastMessage.value = 'Failed to search entities'
         toastType.value = 'warning'
         showToast.value = true
@@ -573,7 +572,7 @@ export default {
           selectedEntity.value = response.entity
         }
       } catch (e) {
-        console.error('Get entity error:', e)
+        // Handle error silently
       }
     }
 
@@ -585,7 +584,7 @@ export default {
           selectedEntity.value = response.entity
         }
       } catch (e) {
-        console.error('Get entity error:', e)
+        // Handle error silently
       }
     }
 
@@ -619,7 +618,6 @@ export default {
           }
         }
       } catch (e) {
-        console.error('Path search error:', e)
         toastMessage.value = 'Failed to search path'
         toastType.value = 'warning'
         showToast.value = true
@@ -639,7 +637,6 @@ export default {
 
           // Check for error in response
           if (statsResponse.status === 'error') {
-            console.error('KG Stats Error:', statsResponse.message)
             toastMessage.value = statsResponse.message || 'Failed to load KG stats'
             toastType.value = 'warning'
             showToast.value = true

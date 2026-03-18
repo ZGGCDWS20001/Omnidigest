@@ -71,7 +71,7 @@ def main():
     """
     # Start the server listening on all interfaces at port 8080
     # 启动服务器，在端口 8080 监听所有网络接口
-    uvicorn.run("omnidigest.main:app", host="0.0.0.0", port=8080, reload=False)
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8080, reload=False)
 
 if __name__ == "__main__":
     main()

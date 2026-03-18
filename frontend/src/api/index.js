@@ -16,7 +16,6 @@ const api = axios.create({
 // Add API key to all requests
 api.interceptors.request.use(config => {
   const apiKey = localStorage.getItem('api_key')
-  console.log('Sending request to:', config.url)
   if (apiKey) {
     config.headers['X-API-Key'] = apiKey
   }
@@ -26,19 +25,15 @@ api.interceptors.request.use(config => {
 // Handle errors
 api.interceptors.response.use(
   response => {
-    console.log('Response received:', response.status, response.data)
     return response.data
   },
   error => {
-    console.error('API Error:', error.response?.status, error.message, error.response?.data)
     if (error.response?.status === 401) {
-      console.warn('API Key invalid, clearing and prompting...')
       localStorage.removeItem('api_key')
-      const newKey = prompt('Invalid API Key. Please enter your API key (format: client_name:key):')
-      if (newKey) {
-        localStorage.setItem('api_key', newKey)
-        window.location.reload()
-      }
+      // Dispatch custom event for API key prompt
+      window.dispatchEvent(new CustomEvent('api-key-required', {
+        detail: { message: 'Invalid API Key. Please enter your API key (format: client_name:key):' }
+      }))
     }
     return Promise.reject(error)
   }

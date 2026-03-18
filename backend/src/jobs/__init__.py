@@ -429,8 +429,8 @@ async def job_handle_telegram_callback(chat_id: int, callback_data: str):
         # 尝试通知用户发生故障
         try:
             pusher.send_telegram("⚠️ 抱歉，生成分析报告时发生了错误。", chat_id=str(chat_id))
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to send error notification: {e}")
 
 
 import threading

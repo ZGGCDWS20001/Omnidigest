@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /opt/venv
 # Make sure we use the virtualenv:
 ENV PATH="/opt/venv/bin:$PATH"
+# Set PYTHONPATH so 'omnidigest' module can be imported from 'src' directory
+ENV PYTHONPATH="/app:$PYTHONPATH"
 
 # Copy the requirements file into the container
 COPY requirements.txt .
@@ -27,10 +29,10 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install the omnidigest package in editable mode
+# Install the omnidigest package (non-editable mode)
 COPY pyproject.toml .
 COPY src src
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 
 # Stage 2: Final
@@ -45,6 +47,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 # Add venv to path
 ENV PATH="/opt/venv/bin:$PATH"
+# Set PYTHONPATH so 'omnidigest' module can be imported from 'src' directory
+ENV PYTHONPATH="/app:$PYTHONPATH"
 
 # Copy only the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
@@ -57,4 +61,4 @@ COPY src/templates templates
 EXPOSE 8080
 
 # Command to run the application
-CMD ["uvicorn", "omnidigest.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]

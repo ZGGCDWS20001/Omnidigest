@@ -99,7 +99,8 @@ class MarketDataService:
                 """
                 try:
                     return float(val) if pd.notna(val) else default
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to convert value to float: {e}")
                     return default
 
             result = {

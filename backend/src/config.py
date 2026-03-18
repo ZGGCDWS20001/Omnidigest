@@ -283,6 +283,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_env_file,
         env_file_encoding="utf-8",
+        env_file_parse_booleans=True,
         extra="ignore"
     )
 
