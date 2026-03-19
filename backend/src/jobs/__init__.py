@@ -844,4 +844,26 @@ def setup_scheduler():
         )
         logger.info(f"A股盘后分析 scheduled at {settings.astock_post_market_hour}:{settings.astock_post_market_minute}")
 
+    # A股异常波动检测任务
+    if getattr(settings, 'enable_astock_alert', True):
+        async def job_astock_alert():
+            """A股异常波动检测任务"""
+            try:
+                from ..domains.analysis.alert_service import get_alert_service
+                alert_service = get_alert_service()
+                result = await alert_service.run_check()
+                logger.info(f"A股异常波动检测完成: {result.get('total_anomalies', 0)} 项异常")
+            except Exception as e:
+                logger.error(f"Error in A股异常波动检测: {e}")
+
+        # 添加定时任务 - 每30分钟执行一次（交易时段）
+        check_interval = getattr(settings, 'astock_alert_check_interval', 30)
+        scheduler.add_job(
+            job_astock_alert,
+            'interval',
+            minutes=check_interval,
+            id='astock_alert'
+        )
+        logger.info(f"A股异常波动检测 scheduled every {check_interval} minutes")
+
     scheduler.start()

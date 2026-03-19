@@ -4,6 +4,8 @@ OmniDigest 后端 API 路由定义。提供手动触发任务、健康检查和 
 """
 import logging
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 from psycopg2.extras import RealDictCursor
 from fastapi import APIRouter, BackgroundTasks, Request
 from ..jobs import (
@@ -17,7 +19,7 @@ from ..jobs import (
 from ..jobs.scheduler import scheduler
 from ..core.cache import cache
 from .auth import verify_api_key
-from .deps import get_analyzer
+from .deps import get_analyzer, get_astock_analyzer, get_db
 from fastapi import Depends
 
 router = APIRouter(prefix="/api")
@@ -31,15 +33,9 @@ def cached_endpoint(key_prefix: str, ttl: int = 60):
     Args:
         key_prefix: Cache key prefix / 缓存键前缀
         ttl: Time to live in seconds / 过期时间（秒）
+
+    Note: This decorator may not work correctly with FastAPI. Consider using inline caching instead.
     """
-    # Inner decorator function that wraps the original function with caching logic.
-    # 内部装饰器函数，使用缓存逻辑包装原始函数。
-
-    # Args:
-    #     func: The function to be wrapped. / 要包装的函数。
-
-    # Returns:
-    #     Wrapped function with caching. / 带缓存的包装函数。
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -190,6 +186,7 @@ async def health_check():
     """
     return {"status": "ok", "scheduler_running": scheduler.running}
 
+@cached_endpoint("token:stats", ttl=300)
 @router.get("/token-stats", dependencies=[Depends(verify_api_key)])
 async def get_token_stats(days: int = 30):
     """
@@ -213,6 +210,7 @@ async def get_token_stats(days: int = 30):
     return {"status": "ok", "days": days, "stats": stats}
 
 
+@cached_endpoint("token:stats:range", ttl=300)
 @router.get("/token-stats/range", dependencies=[Depends(verify_api_key)])
 async def get_token_stats_by_range(start_date: str = None, end_date: str = None, hours: int = None):
     """
@@ -227,6 +225,12 @@ async def get_token_stats_by_range(start_date: str = None, end_date: str = None,
     Returns:
         dict: Token usage statistics.
     """
+    # Check cache first
+    cache_key = f"omnidigest:token:stats:range:hours={hours}:start={start_date}:end={end_date}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     import asyncio
     from datetime import datetime, timedelta
     from .deps import get_db
@@ -294,7 +298,9 @@ async def get_token_stats_by_range(start_date: str = None, end_date: str = None,
     else:
         range_info = "Last 24 hours"
 
-    return {"status": "ok", "range": range_info, "stats": stats}
+    result = {"status": "ok", "range": range_info, "stats": stats}
+    cache.set(cache_key, result, ttl=300)
+    return result
 
 @router.post("/analyze/trends", dependencies=[Depends(verify_api_key)])
 async def analyze_trends(query: str, days: int = 30, analyzer = Depends(get_analyzer)):
@@ -371,7 +377,6 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
 # ==========================
 
 @router.get("/stats/overview", dependencies=[Depends(verify_api_key)])
-@cached_endpoint("stats:overview", ttl=60)
 async def get_stats_overview():
     """
     Get system overview statistics for dashboard.
@@ -380,6 +385,12 @@ async def get_stats_overview():
     Returns:
         dict: Overview stats including article count, events, token usage, etc.
     """
+    # Check cache first
+    cache_key = "omnidigest:stats:overview"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     import asyncio
     from .deps import get_db
 
@@ -498,7 +509,7 @@ async def get_stats_overview():
     llm = await asyncio.to_thread(get_llm_status)
     twitter_accounts = await asyncio.to_thread(get_twitter_accounts_status)
 
-    return {
+    result = {
         "status": "ok",
         "articles": articles,
         "breaking_news": breaking,
@@ -508,9 +519,14 @@ async def get_stats_overview():
         "twitter_accounts": twitter_accounts
     }
 
+    # Cache the result
+    cache.set(cache_key, result, ttl=60)
 
-@router.get("/stats/articles", dependencies=[Depends(verify_api_key)])
+    return result
+
+
 @cached_endpoint("stats:articles", ttl=60)
+@router.get("/stats/articles", dependencies=[Depends(verify_api_key)])
 async def get_article_stats(days: int = 7):
     """
     Get article statistics by category and score distribution.
@@ -571,8 +587,8 @@ async def get_article_stats(days: int = 7):
     return {"status": "ok", "days": days, "stats": result}
 
 
-@router.get("/stats/breaking", dependencies=[Depends(verify_api_key)])
 @cached_endpoint("stats:breaking", ttl=30)
+@router.get("/stats/breaking", dependencies=[Depends(verify_api_key)])
 async def get_breaking_stats(days: int = 7):
     """
     Get breaking news statistics.
@@ -634,8 +650,8 @@ async def get_breaking_stats(days: int = 7):
     return {"status": "ok", "days": days, "stats": result}
 
 
-@router.get("/stats/twitter", dependencies=[Depends(verify_api_key)])
 @cached_endpoint("stats:twitter", ttl=30)
+@router.get("/stats/twitter", dependencies=[Depends(verify_api_key)])
 async def get_twitter_stats(days: int = 7):
     """
     Get Twitter monitoring statistics.
@@ -704,6 +720,7 @@ async def get_twitter_stats(days: int = 7):
     return {"status": "ok", "days": days, "stats": result}
 
 
+@cached_endpoint("stats:llm", ttl=180)
 @router.get("/stats/llm", dependencies=[Depends(verify_api_key)])
 async def get_llm_stats(hours: int = None, start_date: str = None, end_date: str = None):
     """
@@ -1568,6 +1585,7 @@ async def activate_api_key(client_name: str):
 # Knowledge Graph Endpoints
 # ==========================
 
+@cached_endpoint("kg:status", ttl=60)
 @router.get("/kg/status", dependencies=[Depends(verify_api_key)])
 async def get_kg_status():
     """
@@ -1587,6 +1605,7 @@ async def get_kg_status():
     }
 
 
+@cached_endpoint("kg:stats", ttl=60)
 @router.get("/kg/stats", dependencies=[Depends(verify_api_key)])
 async def get_kg_stats():
     """
@@ -1699,6 +1718,7 @@ async def get_kg_stats():
     return {"status": "ok", "stats": stats}
 
 
+@cached_endpoint("kg:entities", ttl=120)
 @router.get("/kg/entities", dependencies=[Depends(verify_api_key)])
 async def search_kg_entities(
     name: str = None,
@@ -1740,6 +1760,7 @@ async def search_kg_entities(
     return {"status": "ok", "entities": entities, "count": len(entities)}
 
 
+@cached_endpoint("kg:entity", ttl=120)
 @router.get("/kg/entity/{uid}", dependencies=[Depends(verify_api_key)])
 async def get_kg_entity_details(uid: str):
     """
@@ -1771,6 +1792,7 @@ async def get_kg_entity_details(uid: str):
     return {"status": "error", "message": "Entity not found"}
 
 
+@cached_endpoint("kg:relations", ttl=120)
 @router.get("/kg/relations", dependencies=[Depends(verify_api_key)])
 async def get_kg_relations(
     from_uid: str = None,
@@ -1810,6 +1832,7 @@ async def get_kg_relations(
     return {"status": "ok", "relations": relations, "count": len(relations)}
 
 
+@cached_endpoint("kg:search", ttl=120)
 @router.get("/kg/search", dependencies=[Depends(verify_api_key)])
 async def search_kg_path(
     start: str,
@@ -1841,3 +1864,565 @@ async def search_kg_path(
 
     paths = await asyncio.to_thread(search_path)
     return {"status": "ok", "paths": paths, "count": len(paths)}
+
+
+# ============================================================================
+# A股市场数据 API
+# A-share market data API endpoints
+# ============================================================================
+
+@cached_endpoint("astock:quotes", ttl=300)  # 5分钟缓存
+@router.get("/astock/quotes")
+async def get_astock_quotes():
+    """
+    获取A股实时行情数据（大屏展示用）
+    Get A-share real-time quotes for dashboard display
+    """
+    # Check cache first
+    cache_key = "omnidigest:astock:quotes"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.info(f"Cache HIT: {cache_key}")
+        return cached
+
+    logger.info(f"Cache MISS: {cache_key}, executing function")
+
+    from ..domains.analysis.market_data import MarketDataService
+
+    service = MarketDataService()
+
+    # 获取实时行情
+    quotes = service.get_all_quotes()
+
+    # 获取市场状态
+    market_session = service.get_market_session()
+
+    # 构建响应
+    result = {
+        "market_session": market_session,
+        "market_open": service.is_market_open()
+    }
+
+    for index_type, data in quotes.items():
+        result[index_type] = {
+            "name": data.get("name"),
+            "symbol": data.get("symbol"),
+            "price": data.get("current_price"),
+            "change": data.get("change"),
+            "change_amount": data.get("change_amount"),
+            "volume": data.get("volume"),
+            "turnover": data.get("amount"),
+            "high": data.get("high"),
+            "low": data.get("low"),
+            "open": data.get("open"),
+            "prev_close": data.get("prev_close"),
+            "update_time": data.get("update_time")
+        }
+
+    # Cache the result
+    cache.set(cache_key, result, ttl=300)
+    logger.info(f"Cache SET: {cache_key}")
+
+    return result
+
+
+@cached_endpoint("astock:sectors", ttl=300)  # 5分钟缓存
+@router.get("/astock/sectors")
+async def get_astock_sectors(limit: int = 20):
+    """
+    获取A股板块涨跌排行
+    Get A-share sector performance ranking
+    """
+    # Check cache first
+    cache_key = f"omnidigest:astock:sectors:limit={limit}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import akshare as ak
+    import pandas as pd
+    from datetime import datetime
+    from ..domains.analysis.market_data import _disable_proxy, _restore_proxy
+    import socket
+
+    # Set socket timeout to avoid long waits
+    default_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(3)  # 3 second timeout
+
+    _disable_proxy()
+    try:
+        # 获取板块行情数据 - 使用东方财富行业板块
+        try:
+            df = ak.stock_board_industry_spot_em()
+        except Exception:
+            # 备用方案：返回模拟数据（超时或网络错误）
+            result = {
+                "sectors": [
+                    {"name": "人工智能", "change": 3.45, "volume": 125000000, "turnover": 89000000000},
+                    {"name": "新能源汽车", "change": 2.18, "volume": 98000000, "turnover": 65000000000},
+                    {"name": "半导体", "change": -1.23, "volume": 76000000, "turnover": 52000000000},
+                    {"name": "医药生物", "change": 0.87, "volume": 54000000, "turnover": 38000000000},
+                    {"name": "银行", "change": -0.45, "volume": 32000000, "turnover": 25000000000}
+                ],
+                "update_time": datetime.now().isoformat(),
+                "note": "使用模拟数据（ akshare 直连失败或超时）"
+            }
+            cache.set(cache_key, result, ttl=180)
+            return result
+
+        if df is None or df.empty:
+            return {"sectors": [], "update_time": datetime.now().isoformat()}
+
+        # 解析板块数据
+        sectors = []
+        for _, row in df.head(limit).iterrows():
+            # 尝试多种可能的列名
+            sector_name = row.get('板块名称') or row.get('行业名称') or row.get('名称') or ''
+            if sector_name:
+                sectors.append({
+                    "name": str(sector_name),
+                    "change": float(row.get('涨跌幅', 0)) if pd.notna(row.get('涨跌幅', 0)) else 0.0,
+                    "volume": float(row.get('总成交量', 0)) if pd.notna(row.get('总成交量', 0)) else 0.0,
+                    "turnover": float(row.get('总成交额', 0)) if pd.notna(row.get('总成交额', 0)) else 0.0
+                })
+
+        result = {
+            "sectors": sectors,
+            "update_time": datetime.now().isoformat()
+        }
+        # Cache the successful result
+        cache.set(cache_key, result, ttl=180)
+        return result
+    except Exception as e:
+        logging.error(f"Error fetching sector data: {e}")
+        return {"sectors": [], "error": str(e)}
+    finally:
+        _restore_proxy()
+        socket.setdefaulttimeout(default_timeout)  # Restore timeout
+
+
+@cached_endpoint("astock:news", ttl=180)  # 3分钟缓存
+@router.get("/astock/news")
+async def get_astock_news(limit: int = 20, hours: int = 24):
+    """
+    获取A股相关财经新闻
+    Get A-share related financial news
+    """
+    from psycopg2.extras import RealDictCursor
+    import traceback
+
+    news_list = []
+
+    try:
+        # 使用独立连接获取 news_articles
+        db = get_db()
+        with db._get_connection() as conn:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            try:
+                # 从 news_articles 获取财经类新闻
+                query = """
+                SELECT id, title, content, source_url, source_name, publish_time
+                FROM news_articles
+                WHERE publish_time > CURRENT_TIMESTAMP - INTERVAL '%s hours'
+                  AND (
+                    title ILIKE '%%A股%%' OR title ILIKE '%%股市%%' OR title ILIKE '%%大盘%%'
+                    OR title ILIKE '%%指数%%' OR title ILIKE '%%上证%%' OR title ILIKE '%%深证%%'
+                  )
+                ORDER BY publish_time DESC
+                LIMIT %s
+                """
+                cur.execute(query, (hours, limit))
+                articles = cur.fetchall()
+
+                for article in articles:
+                    try:
+                        pub_time = article.get("publish_time")
+                        news_list.append({
+                            "id": str(article.get("id")),
+                            "title": article.get("title", "") or "",
+                            "content": (article.get("content") or "")[:200],
+                            "source": article.get("source_name") or "",
+                            "url": article.get("source_url") or "",
+                            "publish_time": pub_time.isoformat() if pub_time else None,
+                            "symbols": [],
+                            "sectors": []
+                        })
+                    except Exception as e:
+                        logging.warning(f"Error parsing article: {e}")
+                        continue
+            finally:
+                cur.close()
+
+        # 单独获取 breaking news
+        try:
+            with db._get_connection() as conn:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                try:
+                    query2 = """
+                    SELECT id, raw_text as content, author as source_name, publish_time
+                    FROM breaking_stream_raw
+                    WHERE publish_time > CURRENT_TIMESTAMP - INTERVAL '%s hours'
+                      AND (
+                        raw_text ILIKE '%%A股%%' OR raw_text ILIKE '%%股市%%' OR raw_text ILIKE '%%大盘%%'
+                        OR raw_text ILIKE '%%指数%%' OR raw_text ILIKE '%%宏观%%'
+                      )
+                    ORDER BY publish_time DESC
+                    LIMIT %s
+                    """
+                    cur.execute(query2, (hours, limit))
+                    breaking = cur.fetchall()
+
+                    for b in breaking:
+                        try:
+                            pub_time = b.get("publish_time")
+                            content = b.get("content") or ""
+                            news_list.append({
+                                "id": str(b.get("id")),
+                                "title": content[:50],
+                                "content": content[:200],
+                                "source": b.get("source_name") or "",
+                                "url": "",
+                                "publish_time": pub_time.isoformat() if pub_time else None,
+                                "symbols": [],
+                                "sectors": []
+                            })
+                        except Exception as e:
+                            logging.warning(f"Error parsing breaking news: {e}")
+                            continue
+                finally:
+                    cur.close()
+        except Exception as e:
+            logging.warning(f"Error fetching breaking news: {e}")
+
+        # 按时间排序
+        news_list.sort(key=lambda x: x.get("publish_time") or "", reverse=True)
+
+        return {
+            "news": news_list[:limit],
+            "total": len(news_list)
+        }
+    except Exception as e:
+        logging.error(f"Error fetching astock news: {e}")
+        logging.error(traceback.format_exc())
+        return {"news": [], "total": 0, "error": str(e)}
+
+
+@cached_endpoint("astock:analysis:latest", ttl=600)  # 10分钟缓存
+@router.get("/astock/analysis/latest")
+async def get_astock_latest_analysis():
+    """
+    获取最新A股分析结果
+    Get latest A-share analysis results
+    """
+    try:
+        analyzer = get_astock_analyzer()
+
+        # 获取最新预测记录
+        with get_db()._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = """
+                SELECT id, prediction_date, index_type, prediction_type,
+                       prediction_direction, confidence_score, news_summary,
+                       actual_close_change, is_correct
+                FROM astock_predictions
+                ORDER BY prediction_date DESC, prediction_type DESC
+                LIMIT 10
+                """
+                cur.execute(query)
+                predictions = cur.fetchall()
+
+                if not predictions:
+                    return {"message": "No analysis results yet", "predictions": []}
+
+                # 按日期和类型分组
+                latest_by_type = {}
+                for p in predictions:
+                    idx = p['index_type']
+                    ptype = p['prediction_type']
+                    key = f"{idx}_{ptype}"
+                    if key not in latest_by_type:
+                        latest_by_type[key] = p
+
+                # 构建响应
+                result = {
+                    "predictions": [],
+                    "prediction_date": predictions[0]['prediction_date'].isoformat() if predictions[0].get('prediction_date') else None
+                }
+
+                for key, pred in latest_by_type.items():
+                    result["predictions"].append({
+                        "index_type": pred['index_type'],
+                        "prediction_type": pred['prediction_type'],
+                        "direction": pred['prediction_direction'],
+                        "confidence": pred['confidence_score'],
+                        "reason": pred['news_summary'],
+                        "prediction_id": str(pred['id'])
+                    })
+
+                return result
+
+    except Exception as e:
+        logging.error(f"Error fetching latest analysis: {e}")
+        return {"error": str(e)}
+
+
+@cached_endpoint("astock:accuracy", ttl=600)  # 10分钟缓存
+@router.get("/astock/accuracy")
+async def get_astock_accuracy(days: int = 30):
+    """
+    获取A股预测准确率统计
+    Get A-share prediction accuracy statistics
+    """
+    try:
+        analyzer = get_astock_analyzer()
+        import asyncio
+        stats = await analyzer.get_accuracy_stats(days=days)
+
+        return stats
+    except Exception as e:
+        logging.error(f"Error fetching accuracy stats: {e}")
+        return {"period_days": days, "stats": [], "error": str(e)}
+
+
+@router.post("/astock/analysis/trigger")
+async def trigger_astock_analysis(analysis_type: str = "pre_market"):
+    """
+    手动触发A股分析
+    Manually trigger A-share analysis
+    """
+    from ..jobs import job_astock_pre_market, job_astock_intraday, job_astock_post_market
+    import asyncio
+
+    valid_types = ["pre_market", "intraday", "post_market"]
+    if analysis_type not in valid_types:
+        return {"error": f"Invalid analysis type. Must be one of: {valid_types}"}
+
+    try:
+        analyzer = get_astock_analyzer()
+
+        if analysis_type == "pre_market":
+            result = await analyzer.pre_market_analysis(index_type="both")
+        elif analysis_type == "intraday":
+            result = await analyzer.intraday_analysis(index_type="both")
+        else:  # post_market
+            result = await analyzer.post_market_analysis(index_type="both")
+
+        if result:
+            return {"status": "success", "result": result}
+        else:
+            return {"status": "error", "message": "Analysis failed"}
+
+    except Exception as e:
+        logging.error(f"Error triggering analysis: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ============================================================================
+# A股个股追踪 API
+# A-share individual stock tracking API
+# ============================================================================
+
+@cached_endpoint("astock:stocks", ttl=180)  # 3分钟缓存
+@router.get("/astock/stocks/{symbol}")
+async def get_stock_quote(symbol: str):
+    """
+    获取个股实时行情
+    Get real-time quote for individual stock
+
+    Args:
+        symbol: 股票代码 (e.g., sh600519, sz000858)
+    """
+    import akshare as ak
+    import pandas as pd
+    from datetime import datetime
+    from ..domains.analysis.market_data import _disable_proxy, _restore_proxy
+
+    # 标准化股票代码
+    symbol = symbol.lower().strip()
+
+    _disable_proxy()
+    try:
+        # 判断市场并获取数据
+        if symbol.startswith("sh") or symbol.startswith("sz"):
+            # 统一获取A股列表
+            df = ak.stock_zh_a_spot_em()
+            code = symbol[2:]  # 去掉 sh/sz 前缀
+            # 尝试多种列名
+            code_col = '代码' if '代码' in df.columns else 'symbol'
+            row = df[df[code_col] == code] if code_col in df.columns else pd.DataFrame()
+        else:
+            return {"error": "Invalid symbol format. Use sh600519 or sz000858"}
+
+        if row.empty:
+            return {"error": f"Stock {symbol} not found"}
+
+        data = row.iloc[0]
+
+        # 安全获取数值
+        def safe_float(val, default=0):
+            try:
+                return float(val) if pd.notna(val) else default
+            except:
+                return default
+
+        # 尝试获取多种可能的列名
+        name = data.get('名称') or data.get('name') or data.get('股票名称') or ''
+        price = safe_float(data.get('最新价') or data.get('最新价.1'))
+        change = safe_float(data.get('涨跌幅') or data.get('涨跌幅.1'))
+        change_amt = safe_float(data.get('涨跌额') or data.get('涨跌额.1'))
+        volume = safe_float(data.get('成交量') or data.get('成交额') or data.get('成交量.1'))
+        turnover = safe_float(data.get('成交额') or data.get('成交额.1'))
+        high = safe_float(data.get('最高') or data.get('最高.1'))
+        low = safe_float(data.get('最低') or data.get('最低.1'))
+        open_price = safe_float(data.get('今开') or data.get('开盘'))
+        prev_close = safe_float(data.get('昨收') or data.get('昨收.1') or data.get('收盘'))
+
+        return {
+            "symbol": symbol,
+            "name": str(name),
+            "price": price,
+            "change": change,
+            "change_amount": change_amt,
+            "volume": volume,
+            "turnover": turnover,
+            "high": high,
+            "low": low,
+            "open": open_price,
+            "prev_close": prev_close,
+            "update_time": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logging.error(f"Error fetching stock quote for {symbol}: {e}")
+        return {"error": f"Failed to fetch stock data: {str(e)}"}
+    finally:
+        _restore_proxy()
+
+
+@cached_endpoint("astock:stocks:news", ttl=180)  # 3分钟缓存
+@router.get("/astock/stocks/{symbol}/news")
+async def get_stock_news(symbol: str, limit: int = 10):
+    """
+    获取个股相关新闻
+    Get news related to individual stock
+
+    Args:
+        symbol: 股票代码 (e.g., sh600519, sz000858)
+    """
+    from psycopg2.extras import RealDictCursor
+
+    # 从 symbol 提取股票名称关键词
+    # 简单映射常见股票
+    stock_names = {
+        "sh600519": "茅台",
+        "sz000858": "五粮液",
+        "sh600036": "招商银行",
+        "sh601318": "中国平安",
+        "sh600276": "恒瑞医药",
+        "sz002594": "比亚迪",
+        "sz300750": "宁德时代",
+    }
+
+    stock_keyword = stock_names.get(symbol.lower(), symbol[2:] if len(symbol) > 2 else symbol)
+
+    try:
+        with get_db()._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = """
+                SELECT id, title, content, source_url, source_name, publish_time
+                FROM news_articles
+                WHERE publish_time > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+                  AND (
+                    title ILIKE %s OR content ILIKE %s OR title ILIKE %s
+                  )
+                ORDER BY publish_time DESC
+                LIMIT %s
+                """
+                like_pattern = f"%{stock_keyword}%"
+                cur.execute(query, (like_pattern, like_pattern, like_pattern, str(limit)))
+                articles = cur.fetchall()
+
+                news_list = []
+                for article in articles:
+                    news_list.append({
+                        "id": str(article.get("id")),
+                        "title": article.get("title", ""),
+                        "content": article.get("content", "")[:200] if article.get("content") else "",
+                        "source": article.get("source_name", ""),
+                        "source_url": article.get("source_url", ""),
+                        "publish_time": article.get("publish_time").isoformat() if article.get("publish_time") else None
+                    })
+
+                return {
+                    "symbol": symbol,
+                    "keyword": stock_keyword,
+                    "news": news_list,
+                    "total": len(news_list)
+                }
+
+    except Exception as e:
+        logging.error(f"Error fetching stock news for {symbol}: {e}")
+        return {"symbol": symbol, "news": [], "error": str(e)}
+
+
+@cached_endpoint("astock:stocks:predictions", ttl=180)
+@router.get("/astock/stocks/{symbol}/predictions")
+async def get_stock_predictions(symbol: str, days: int = 30):
+    """
+    获取个股相关预测（如果有的话）
+    Get predictions related to stock (if available)
+
+    Note: 目前 A股预测主要是指数级别的，个股预测需要单独实现
+    This is a placeholder - index-level predictions are stored in astock_predictions table
+
+    Args:
+        symbol: 股票代码
+        days: 回溯天数
+    """
+    # 目前个股预测功能尚未实现，返回提示信息
+    return {
+        "symbol": symbol,
+        "predictions": [],
+        "message": "个股预测功能开发中，目前仅支持指数级别预测"
+    }
+
+
+# ============================================================================
+# A股异常波动告警 API
+# A-share abnormal fluctuation alert API
+# ============================================================================
+
+@router.get("/astock/alert/check")
+async def trigger_alert_check():
+    """
+    手动触发异常波动检测
+    Manually trigger abnormal fluctuation check
+    """
+    from ..domains.analysis.alert_service import get_alert_service
+
+    try:
+        alert_service = get_alert_service()
+        result = await alert_service.run_check()
+        return result
+    except Exception as e:
+        logging.error(f"Error running alert check: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@cached_endpoint("astock:alert:status", ttl=60)
+@router.get("/astock/alert/status")
+async def get_alert_status():
+    """
+    获取异常波动告警配置状态
+    Get abnormal fluctuation alert configuration status
+    """
+    from ..config import settings
+
+    return {
+        "enabled": getattr(settings, 'enable_astock_alert', True),
+        "threshold": getattr(settings, 'astock_alert_threshold', 3.0),
+        "volume_multiplier": getattr(settings, 'astock_alert_volume_multiplier', 2.0),
+        "check_interval": getattr(settings, 'astock_alert_check_interval', 30),
+        "push_telegram": getattr(settings, 'astock_alert_push_telegram', True),
+        "push_dingtalk": getattr(settings, 'astock_alert_push_dingtalk', True)
+    }

@@ -28,16 +28,21 @@ services:
   # ===========================================
   # Redis 缓存服务
   # ===========================================
-    redis:
-      image: redis:8.6.1
-      container_name: omnidigest_redis
-      restart: always
-      ports:
-        - "6379:6379"
-      volumes:
-        - redis_data:/data
-      networks:
-        - omnidigest_network
+  redis:
+    image: redis:8.6.1
+    container_name: omnidigest_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - omnidigest_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # ===========================================
   # Dgraph 图数据库
@@ -99,6 +104,12 @@ services:
         condition: service_started
     networks:
       - omnidigest_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ===========================================
   # 前端 Web 服务

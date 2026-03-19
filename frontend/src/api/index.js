@@ -1,10 +1,8 @@
 import axios from 'axios'
 
-// 生产环境 API 地址（通过环境变量 VITE_API_URL 设置）
-// 开发环境: 空字符串，通过 Vite 代理 /api -> localhost:8080
-// 生产环境: 设置为实际 API 地址，如 https://api.yourdomain.com
-// 注意: import.meta.env.VITE_* 在构建时会被替换
-const apiBaseURL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || '/api'
+// 开发环境: 通过 Vite 代理 /api -> localhost:7080
+// 生产环境: 设置 VITE_API_URL 环境变量
+const apiBaseURL = import.meta?.env?.VITE_API_URL || '/api'
 
 const api = axios.create({
   baseURL: apiBaseURL,
@@ -18,6 +16,9 @@ api.interceptors.request.use(config => {
   const apiKey = localStorage.getItem('api_key')
   if (apiKey) {
     config.headers['X-API-Key'] = apiKey
+    console.log('API key added to request:', config.url)
+  } else {
+    console.log('No API key found for request:', config.url)
   }
   return config
 })
@@ -119,6 +120,28 @@ export const kgApi = {
   getRelations: (params) => api.get('/kg/relations', { params }),
   // Search path between entities
   searchPath: (params) => api.get('/kg/search', { params })
+}
+
+// A-Stock Analysis API
+export const astockApi = {
+  // 实时行情
+  quotes: () => api.get('/astock/quotes'),
+  // 板块涨跌排行
+  sectors: () => api.get('/astock/sectors'),
+  // 财经新闻列表
+  news: (limit = 20) => api.get(`/astock/news?limit=${limit}`),
+  // 最新分析结果
+  latestAnalysis: () => api.get('/astock/analysis/latest'),
+  // 历史预测
+  predictions: (days = 30) => api.get(`/astock/predictions?days=${days}`),
+  // 准确率统计
+  accuracy: () => api.get('/astock/accuracy'),
+  // 手动触发分析
+  triggerAnalysis: () => api.post('/astock/analysis/trigger'),
+  // 个股行情
+  stockQuote: (symbol) => api.get(`/astock/stocks/${symbol}`),
+  // 个股新闻
+  stockNews: (symbol, limit = 20) => api.get(`/astock/stocks/${symbol}/news?limit=${limit}`)
 }
 
 export default api

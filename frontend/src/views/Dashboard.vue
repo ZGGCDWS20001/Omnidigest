@@ -182,7 +182,6 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { statsApi } from '../api'
-import api from '../api'
 
 export default {
   name: 'Dashboard',
@@ -207,7 +206,7 @@ export default {
           statsApi.overview(),
           statsApi.breaking(7),
           statsApi.twitter(7),
-          api.get('/token-stats/range?hours=24')
+          statsApi.tokenStatsByRange(null, null, 24)
         ])
 
         const normalizeCounts = (obj) => {
@@ -227,6 +226,7 @@ export default {
           rss_sources: normalizeCounts(overviewData.rss_sources),
           llm_models: normalizeCounts(overviewData.llm_models)
         }
+        console.log('Dashboard data loaded:', overview.value)
         breakingEvents.value = breakingData.stats?.recent_events || []
         twitterEvents.value = twitterData.stats?.recent_events || []
 
@@ -248,6 +248,7 @@ export default {
           }
         }
       } catch (e) {
+        console.error('Dashboard API error:', e)
         error.value = e.message || 'Failed to load dashboard data'
       } finally {
         loading.value = false

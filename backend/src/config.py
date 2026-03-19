@@ -267,6 +267,16 @@ class Settings(BaseSettings):
     astock_news_hours: int = Field(default=24, env="ASTOCK_NEWS_HOURS")
 
     # ==========================
+    # A股异常波动推送配置
+    # ==========================
+    enable_astock_alert: bool = Field(default=True, env="ENABLE_ASTOCK_ALERT")
+    astock_alert_threshold: float = Field(default=3.0, env="ASTOCK_ALERT_THRESHOLD")  # 涨跌幅阈值 %
+    astock_alert_volume_multiplier: float = Field(default=2.0, env="ASTOCK_ALERT_VOLUME_MULTIPLIER")  # 成交量倍数
+    astock_alert_check_interval: int = Field(default=30, env="ASTOCK_ALERT_CHECK_INTERVAL")  # 检查间隔（分钟）
+    astock_alert_push_telegram: bool = Field(default=True, env="ASTOCK_ALERT_PUSH_TELEGRAM")
+    astock_alert_push_dingtalk: bool = Field(default=True, env="ASTOCK_ALERT_PUSH_DINGTALK")
+
+    # ==========================
     # Redis Cache Configuration
     # Redis 缓存配置
     # ==========================

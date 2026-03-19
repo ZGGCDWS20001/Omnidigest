@@ -62,6 +62,10 @@
           <span class="icon">📊</span>
           <span class="nav-text">Dashboard</span>
         </router-link>
+        <router-link to="/stocks" title="A-Stock Analysis" @click="closeMobileMenu">
+          <span class="icon">📈</span>
+          <span class="nav-text">A-Stock</span>
+        </router-link>
         <router-link to="/knowledge-graph" title="Knowledge Graph" @click="closeMobileMenu">
           <span class="icon">🔗</span>
           <span class="nav-text">Knowledge Graph</span>

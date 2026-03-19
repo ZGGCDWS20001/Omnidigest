@@ -39,6 +39,9 @@ RUN pip install --no-cache-dir .
 # Start from a fresh image
 FROM python:3.11-slim
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Set the working directory
 WORKDIR /app
 

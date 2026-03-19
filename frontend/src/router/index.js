@@ -4,6 +4,8 @@ import Config from '../views/Config.vue'
 import Sources from '../views/Sources.vue'
 import TokenStats from '../views/TokenStats.vue'
 import KnowledgeGraph from '../views/KnowledgeGraph.vue'
+import AStock from '../views/AStock.vue'
+import StockDetail from '../views/StockDetail.vue'
 
 const routes = [
   {
@@ -11,6 +13,18 @@ const routes = [
     name: 'Dashboard',
     component: Dashboard,
     meta: { title: 'Dashboard' }
+  },
+  {
+    path: '/stocks',
+    name: 'AStock',
+    component: AStock,
+    meta: { title: 'A-Stock Analysis' }
+  },
+  {
+    path: '/stocks/:symbol',
+    name: 'StockDetail',
+    component: StockDetail,
+    meta: { title: 'Stock Detail' }
   },
   {
     path: '/config',
