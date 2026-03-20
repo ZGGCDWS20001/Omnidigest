@@ -567,29 +567,39 @@ def setup_scheduler():
             next_run_time=datetime.datetime.now()
         )
         
-        # 2. Continuous Processor Loop
-        # 连续处理循环
+        # 2. Continuous Processor Loop (Runs every 5 minutes to ensure continuous processing)
+        # 连续处理循环（每5分钟运行一次，确保持续处理）
         async def run_processor_loop():
-            await breaking_processor.run_processing_cycle()
-            
-        # We start the loop once when the scheduler starts, using a dummy date triggered immediately
+            try:
+                await breaking_processor.run_processing_cycle()
+            except Exception as e:
+                logger.error(f"Breaking processor loop error: {e}", exc_info=True)
+                # Re-raise to let APScheduler handle the error
+                raise
+
         scheduler.add_job(
             run_processor_loop,
-            'date',
-            run_date=datetime.datetime.now() + datetime.timedelta(seconds=5),
-            id='breaking_processor_loop'
+            'interval',
+            minutes=5,
+            id='breaking_processor_loop',
+            next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=5)
         )
-        
-        # 3. Continuous Alerter Loop
-        # 连续报警循环
+
+        # 3. Continuous Alerter Loop (Runs every 5 minutes)
+        # 连续报警循环（每5分钟运行一次）
         async def run_alerter_loop():
-            await breaking_alerter.run_alerter_loop(interval_seconds=30)
-            
+            try:
+                await breaking_alerter.run_alerter_loop(interval_seconds=30)
+            except Exception as e:
+                logger.error(f"Breaking alerter loop error: {e}", exc_info=True)
+                raise
+
         scheduler.add_job(
             run_alerter_loop,
-            'date',
-            run_date=datetime.datetime.now() + timedelta(seconds=10),
-            id='breaking_alerter_loop'
+            'interval',
+            minutes=5,
+            id='breaking_alerter_loop',
+            next_run_time=datetime.datetime.now() + timedelta(seconds=10)
         )
 
         # 4. Knowledge Graph Tasks
