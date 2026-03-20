@@ -16,3 +16,4 @@ pydgraph>=21.3.2
 instructor>=1.0.0
 akshare>=1.12.0
 redis>=5.0.0
+prometheus-fastapi-instrumentator>=5.0.0

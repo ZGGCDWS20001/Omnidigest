@@ -9,8 +9,13 @@ from typing import Any, Optional
 import redis
 
 from src.config import settings
+from src.core.metrics import cache_hits_total, cache_misses_total, cache_hit_ratio
 
 logger = logging.getLogger(__name__)
+
+# Track cache hits/misses for metrics
+_cache_hits = 0
+_cache_misses = 0
 
 
 class CacheService:
@@ -72,19 +77,36 @@ class CacheService:
         Returns:
             Cached value or None if not found / 缓存值或未找到时返回 None
         """
+        global _cache_hits, _cache_misses
+
         if not self.client:
+            cache_misses_total.labels(cache_type="redis").inc()
+            _cache_misses += 1
+            _update_cache_ratio()
             return None
 
         try:
             data = self.client.get(key)
             if data:
+                cache_hits_total.labels(cache_type="redis").inc()
+                _cache_hits += 1
+                _update_cache_ratio()
                 return json.loads(data)
+            cache_misses_total.labels(cache_type="redis").inc()
+            _cache_misses += 1
+            _update_cache_ratio()
             return None
         except json.JSONDecodeError as e:
             logger.error(f"Cache JSON decode error for key {key}: {e}")
+            cache_misses_total.labels(cache_type="redis").inc()
+            _cache_misses += 1
+            _update_cache_ratio()
             return None
         except redis.RedisError as e:
             logger.warning(f"Redis get error for key {key}: {e}")
+            cache_misses_total.labels(cache_type="redis").inc()
+            _cache_misses += 1
+            _update_cache_ratio()
             return None
 
     def set(self, key: str, value: Any, ttl: int = 60) -> bool:
@@ -178,6 +200,15 @@ class CacheService:
         except redis.RedisError as e:
             logger.warning(f"Redis exists error for key {key}: {e}")
             return False
+
+
+def _update_cache_ratio():
+    """Update cache hit ratio gauge."""
+    global _cache_hits, _cache_misses
+    total = _cache_hits + _cache_misses
+    if total > 0:
+        ratio = _cache_hits / total
+        cache_hit_ratio.labels(cache_type="redis").set(ratio)
 
 
 # Global cache instance / 全局缓存实例

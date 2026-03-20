@@ -8,6 +8,7 @@ import uvicorn
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 from .api.deps import get_db
 from .jobs.scheduler import scheduler
 from .jobs import setup_scheduler, job_cleanup_low_quality
@@ -19,6 +20,13 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics instrumentator
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/health", "/metrics"]
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +70,10 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
 app = FastAPI(title="OmniDigest API", lifespan=lifespan)
+
+# Add Prometheus metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
+
 app.include_router(router)
 
 def main():

@@ -8,9 +8,18 @@ from psycopg2.pool import ThreadedConnectionPool
 from contextlib import contextmanager
 import uuid
 import logging
+import time
+import threading
+from typing import Dict, Any
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+# Connection pool configuration / 连接池配置
+DEFAULT_MIN_CONN = 2
+DEFAULT_MAX_CONN = 50  # Increased from 20 to handle more concurrent requests
+CONNECTION_TIMEOUT = 10  # seconds
+IDLE_CONNECTION_THRESHOLD = 300  # seconds - warn if connection idle for too long
 
 
 from ..domains.daily_digest.db_repo import DailyNewsMixin
@@ -23,6 +32,12 @@ class DatabaseManager(DailyNewsMixin, RssSourcesMixin, FastRssSourcesMixin, Auth
     """
     Manages database interactions for news articles.
     管理新闻文章的数据库交互。
+
+    Features:
+    - Connection pooling with configurable limits / 连接池，可配置限制
+    - Connection health checking / 连接健康检查
+    - Leak detection for idle connections / 空闲连接泄漏检测
+    - Pool status metrics / 连接池状态指标
     """
     def __init__(self):
         """
@@ -30,34 +45,168 @@ class DatabaseManager(DailyNewsMixin, RssSourcesMixin, FastRssSourcesMixin, Auth
         初始化 DatabaseManager。将内部连接池对象设置为 None。连接是延迟实例化的。
         """
         self._pool = None
+        self._connection_timestamps: Dict[Any, float] = {}  # Track connection checkout times
+        self._lock = threading.Lock()
+        self._stats = {
+            "total_checkouts": 0,
+            "total_checkins": 0,
+            "health_checks": 0,
+            "failed_health_checks": 0,
+            "leak_warnings": 0
+        }
+
+    def _initialize_pool(self):
+        """
+        Initialize the connection pool if not already done.
+        如果连接池尚未初始化，则初始化它。
+        """
+        if not self._pool:
+            with self._lock:
+                # Double-check after acquiring lock
+                if not self._pool:
+                    logger.info(f"Initializing connection pool: min={DEFAULT_MIN_CONN}, max={DEFAULT_MAX_CONN}")
+                    self._pool = ThreadedConnectionPool(
+                        minconn=DEFAULT_MIN_CONN,
+                        maxconn=DEFAULT_MAX_CONN,
+                        host=settings.db_host,
+                        port=settings.db_port,
+                        user=settings.db_user,
+                        password=settings.db_password,
+                        dbname=settings.db_name,
+                        connection_factory=None,
+                        cursor_factory=None
+                    )
+                    logger.info("Connection pool initialized successfully")
+
+    def get_pool_status(self) -> Dict[str, Any]:
+        """
+        Get current connection pool status metrics.
+        获取当前连接池状态指标。
+
+        Returns:
+            dict: Pool status including connections, health, and stats.
+        """
+        self._initialize_pool()
+        pool = self._pool
+
+        # Count idle and used connections by checking the internal pool state
+        # Note: psycopg2 doesn't expose this directly, so we estimate
+        try:
+            # Try to get a connection to test pool responsiveness
+            test_conn = pool.getconn()
+            pool.putconn(test_conn)
+            pool_healthy = True
+        except Exception:
+            pool_healthy = False
+
+        return {
+            "pool_initialized": self._pool is not None,
+            "pool_healthy": pool_healthy,
+            "max_connections": DEFAULT_MAX_CONN,
+            "min_connections": DEFAULT_MIN_CONN,
+            "stats": self._stats.copy()
+        }
+
+    def _check_connection_health(self, conn) -> bool:
+        """
+        Check if a connection is still healthy.
+        检查连接是否仍然健康。
+
+        Args:
+            conn: The database connection to check.
+
+        Returns:
+            bool: True if connection is healthy.
+        """
+        try:
+            conn.isolation_level
+            # Try a simple query to verify connection is alive
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except Exception as e:
+            logger.warning(f"Connection health check failed: {e}")
+            return False
 
     @contextmanager
     def _get_connection(self):
         """
         Retrieves an active PostgreSQL database connection from the pool. If the pool doesn't exist, a new one is created using settings.
         从连接池检索活动的 PostgreSQL 数据库连接。如果池不存在，则使用设置创建一个新池。
-        
+
+        Features:
+        - Lazy pool initialization / 延迟池初始化
+        - Connection checkout time tracking / 连接检出时间跟踪
+        - Automatic health check on checkout / 检出时自动健康检查
+
         Yields:
             psycopg2.extensions.connection: The active database connection object. / 活动的数据库连接对象。
         """
-        # Check if the pool is uninitialized
-        # 检查池是否未初始化
-        if not self._pool:
-            self._pool = ThreadedConnectionPool(
-                minconn=1,
-                maxconn=20,
-                host=settings.db_host,
-                port=settings.db_port,
-                user=settings.db_user,
-                password=settings.db_password,
-                dbname=settings.db_name
-            )
-            
+        # Initialize pool if needed
+        self._initialize_pool()
+
         conn = self._pool.getconn()
+        checkout_time = time.time()
+
+        # Track checkout
+        with self._lock:
+            self._connection_timestamps[id(conn)] = checkout_time
+            self._stats["total_checkouts"] += 1
+
         try:
+            # Health check on checkout - only if connection was used recently
+            if self._stats["total_checkouts"] % 10 == 0:  # Check every 10 checkouts
+                self._stats["health_checks"] += 1
+                if not self._check_connection_health(conn):
+                    self._stats["failed_health_checks"] += 1
+                    logger.warning("Health check failed, attempting to reconnect...")
+                    # Force a new connection by resetting
+                    self._pool.putconn(conn, close=True)
+                    conn = self._pool.getconn()
+                    # Update timestamp for new connection
+                    with self._lock:
+                        self._connection_timestamps[id(conn)] = time.time()
+
+            # Check for potential leaks (connections checked out too long)
+            idle_time = time.time() - checkout_time
+            if idle_time > IDLE_CONNECTION_THRESHOLD:
+                self._stats["leak_warnings"] += 1
+                logger.warning(f"Potential connection leak: connection checked out for {idle_time:.1f}s")
+
             yield conn
         finally:
+            # Return connection to pool
             self._pool.putconn(conn)
+            with self._lock:
+                self._stats["total_checkins"] += 1
+                # Clean up timestamp
+                if id(conn) in self._connection_timestamps:
+                    del self._connection_timestamps[id(conn)]
+
+    def check_pool_health(self) -> bool:
+        """
+        Perform a comprehensive health check on the connection pool.
+        对连接池执行全面的健康检查。
+
+        Returns:
+            bool: True if pool is healthy.
+        """
+        if not self._pool:
+            return False
+
+        try:
+            # Test getting a connection from the pool
+            conn = self._pool.getconn()
+            try:
+                # Execute a simple query
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                return True
+            finally:
+                self._pool.putconn(conn)
+        except Exception as e:
+            logger.error(f"Pool health check failed: {e}")
+            return False
 
     def close_all(self):
         """
@@ -65,8 +214,13 @@ class DatabaseManager(DailyNewsMixin, RssSourcesMixin, FastRssSourcesMixin, Auth
         关闭池中的所有连接。
         """
         if self._pool:
+            logger.info("Closing all database connections...")
             self._pool.closeall()
             self._pool = None
+            with self._lock:
+                self._connection_timestamps.clear()
+                # Reset stats but keep them for reference
+                logger.info(f"Final pool stats: {self._stats}")
 
     def check_integrity(self):
         """
