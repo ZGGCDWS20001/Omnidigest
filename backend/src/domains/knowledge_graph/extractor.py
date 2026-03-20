@@ -71,6 +71,7 @@ class KGExtractor:
             JOIN event_stream_mapping m ON m.event_id = e.id
             JOIN breaking_stream_raw r ON r.id = m.stream_id
             WHERE r.kg_processed = FALSE
+              AND r.status = 1  -- Only process streams that breaking_processor has completed
               AND r.created_at > NOW() - INTERVAL '1 hour' * %s
             ORDER BY r.created_at DESC
         """
