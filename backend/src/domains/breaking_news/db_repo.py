@@ -54,7 +54,7 @@ class BreakingNewsMixin:
         SELECT id, source_platform, source_url, raw_text, author, publish_time
         FROM breaking_stream_raw
         WHERE status = 0
-        ORDER BY created_at ASC
+        ORDER BY created_at DESC
         LIMIT %s
         """
         try:
