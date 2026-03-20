@@ -567,26 +567,25 @@ def setup_scheduler():
             next_run_time=datetime.datetime.now()
         )
         
-        # 2. Continuous Processor Loop (Runs every 5 minutes to ensure continuous processing)
-        # 连续处理循环（每5分钟运行一次，确保持续处理）
+        # 2. Breaking News Processor (Runs every 30 seconds for near real-time processing)
+        # 突发新闻处理器（每30秒运行一次，实现近实时处理）
         async def run_processor_loop():
             try:
                 await breaking_processor.run_processing_cycle()
             except Exception as e:
                 logger.error(f"Breaking processor loop error: {e}", exc_info=True)
-                # Re-raise to let APScheduler handle the error
                 raise
 
         scheduler.add_job(
             run_processor_loop,
             'interval',
-            minutes=5,
+            seconds=30,  # Changed from 5 minutes to 30 seconds for faster processing
             id='breaking_processor_loop',
             next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=5)
         )
 
-        # 3. Continuous Alerter Loop (Runs every 5 minutes)
-        # 连续报警循环（每5分钟运行一次）
+        # 3. Breaking Alerter (Runs every 30 seconds)
+        # 突发新闻告警（每30秒运行一次）
         async def run_alerter_loop():
             try:
                 await breaking_alerter.run_alerter_loop(interval_seconds=30)
@@ -597,7 +596,7 @@ def setup_scheduler():
         scheduler.add_job(
             run_alerter_loop,
             'interval',
-            minutes=5,
+            seconds=30,  # Changed from 5 minutes to 30 seconds
             id='breaking_alerter_loop',
             next_run_time=datetime.datetime.now() + timedelta(seconds=10)
         )

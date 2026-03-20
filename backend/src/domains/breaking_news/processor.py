@@ -209,26 +209,24 @@ class BreakingProcessor:
     async def run_processing_cycle(self):
         """
         Pulls unclassified raw streams and processes them concurrently.
-        提取未分类的原始流并并发处理它们。
+        Single batch per invocation - scheduler handles continuous triggering.
+        提取未分类的原始流并并发处理。每次调用只处理一个批次，调度器负责持续触发。
         """
         batch_size = settings.breaking_processor_batch_size
         max_concurrent = settings.breaking_processor_concurrency
         semaphore = asyncio.Semaphore(max_concurrent)
-        
+
         async def sem_process(stream):
             async with semaphore:
                 return await self.process_single_stream(stream)
-                
-        while True:
-            # Note: The raw streams are currently fetched via sync calls wrapped in to_thread
-            streams = await asyncio.to_thread(self.db.get_unprocessed_breaking_streams, limit=batch_size)
-            if not streams:
-                await asyncio.sleep(10)
-                continue
-                
-            logger.info(f"Processing batch of {len(streams)} raw breaking streams...")
-            
-            tasks = [sem_process(stream) for stream in streams]
-            await asyncio.gather(*tasks, return_exceptions=True)
-            
-            await asyncio.sleep(1)
+
+        # Single batch processing - no infinite loop
+        # 每次调度只处理一个批次，不使用 while True 循环
+        streams = await asyncio.to_thread(self.db.get_unprocessed_breaking_streams, limit=batch_size)
+        if not streams:
+            return  # No pending work, exit cleanly
+
+        logger.info(f"Processing batch of {len(streams)} raw breaking streams...")
+
+        tasks = [sem_process(stream) for stream in streams]
+        await asyncio.gather(*tasks, return_exceptions=True)
