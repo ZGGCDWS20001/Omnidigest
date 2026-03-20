@@ -9,6 +9,8 @@ and relationships, and writes them into Dgraph.
 import json
 import logging
 import asyncio
+from typing import Optional
+from pydantic import BaseModel, Field
 from .dgraph_client import DgraphClient
 from .prompts import KG_EXTRACTION_PROMPT, ENTITY_RESOLUTION_PROMPT
 from ...config import settings
@@ -16,6 +18,39 @@ from ...core.database import DatabaseManager
 from ...core.llm_manager import LLMManager
 
 logger = logging.getLogger(__name__)
+
+
+class KGEntity(BaseModel):
+    """Schema for a single extracted entity."""
+    name: str = Field(description="Entity name")
+    type: str = Field(description="Entity type: Person, Organization, or Location")
+    description: str = Field(description="Brief description of the entity's role in this article")
+
+
+class KGRelation(BaseModel):
+    """Schema for a single extracted relationship."""
+    source: str = Field(description="Source entity name")
+    relation: str = Field(description="Normalized relation type")
+    target: str = Field(description="Target entity name")
+    context: str = Field(description="Original text supporting this relationship")
+
+
+class KGExtractionResult(BaseModel):
+    """Schema for the complete KG extraction response using instructor."""
+    entities: list[KGEntity] = Field(default_factory=list, description="List of extracted entities")
+    relations: list[KGRelation] = Field(default_factory=list, description="List of extracted relations")
+
+
+class MergeGroup(BaseModel):
+    """Schema for a single entity merge group."""
+    canonical_name: str = Field(description="Standardized canonical name")
+    aliases: list[str] = Field(description="List of aliases to merge")
+    reason: str = Field(default="", description="Reason for merging")
+
+
+class EntityResolutionResult(BaseModel):
+    """Schema for entity resolution response using instructor."""
+    merge_groups: list[MergeGroup] = Field(default_factory=list, description="List of merge groups")
 
 
 def _edit_distance(s1: str, s2: str) -> int:
@@ -99,13 +134,13 @@ class KGExtractor:
         except Exception as e:
             logger.error(f"Error marking stream {stream_id} as KG processed: {e}")
 
-    async def extract_triples(self, event_title: str, category: str, raw_text: str) -> dict:
+    async def extract_triples(self, event_title: str, category: str, raw_text: str) -> Optional[KGExtractionResult]:
         """
-        Calls LLM to extract entities and relationships from a news article.
-        调用 LLM 从新闻文章中抽取实体 and 关系。
+        Calls LLM to extract entities and relationships from a news article using instructor.
+        调用 LLM 使用 instructor 从新闻文章中抽取实体和关系。
 
         Returns:
-            dict with 'entities' and 'relations' lists, or None on failure.
+            KGExtractionResult with entities and relations, or None on failure.
         """
         prompt = KG_EXTRACTION_PROMPT.format(
             event_title=event_title,
@@ -114,26 +149,20 @@ class KGExtractor:
         )
 
         try:
-            content = await self.llm.chat_completion(
+            result: KGExtractionResult = await self.llm.chat_completion_structured(
+                response_model=KGExtractionResult,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
                 service_name="kg_extract"
             )
-            if not content:
-                return None
-                
-            content = self.llm._clean_json_output(content)
-            data = json.loads(content)
-            entities = data.get("entities", [])
-            relations = data.get("relations", [])
-            logger.info(f"  Extracted {len(entities)} entities, {len(relations)} relations.")
-            return data
+            logger.info(f"  Extracted {len(result.entities)} entities, {len(result.relations)} relations.")
+            return result
         except Exception as e:
             logger.error(f"  LLM extraction failed: {e}")
             return None
 
     def write_to_dgraph(self, event_id: str, event_title: str, summary: str,
-                         category: str, extraction: dict, event_date: str = None):
+                         category: str, extraction: KGExtractionResult, event_date: str = None):
         """
         Writes extracted entities and relationships to Dgraph in a single transaction.
         在单个事务中将抽取的实体和关系写入 Dgraph。
@@ -143,7 +172,7 @@ class KGExtractor:
             event_title (str): The title of the event. / 事件标题。
             summary (str): The event summary. / 事件摘要。
             category (str): The category of the event. / 事件类别。
-            extraction (dict): The extracted JSON data. / 抽取的 JSON 数据。
+            extraction (KGExtractionResult): The structured extraction result. / 结构化抽取结果。
             event_date (str, optional): The date of the event. / 事件日期（可选）。
         """
         txn = self.dgraph.new_txn()
@@ -160,10 +189,10 @@ class KGExtractor:
             entity_uid_map = {}
 
             # 2. Upsert entities with source tracking and link them to the event
-            for entity in extraction.get("entities", []):
-                name = entity.get("name", "").strip()
-                etype = entity.get("type", "Person")
-                desc = entity.get("description", "")
+            for entity in extraction.entities:
+                name = entity.name.strip()
+                etype = entity.type
+                desc = entity.description
                 if not name or etype not in ("Person", "Organization", "Location"):
                     continue
 
@@ -177,11 +206,11 @@ class KGExtractor:
                     if mu: mutations.append(mu)
 
             # 3. Create inter-entity relations with normalized type
-            for rel in extraction.get("relations", []):
-                source_name = rel.get("source", "").strip()
-                target_name = rel.get("target", "").strip()
-                relation = rel.get("relation", "").strip()
-                context = rel.get("context", "")  # Original context for reference
+            for rel in extraction.relations:
+                source_name = rel.source.strip()
+                target_name = rel.target.strip()
+                relation = rel.relation.strip()
+                context = rel.context  # Original context for reference
                 if source_name in entity_uid_map and target_name in entity_uid_map and relation:
                     mu = self.dgraph.create_relation(
                         txn, entity_uid_map[source_name],
@@ -272,27 +301,22 @@ class KGExtractor:
             )
 
             try:
-                content = await self.llm.chat_completion(
+                result: EntityResolutionResult = await self.llm.chat_completion_structured(
+                    response_model=EntityResolutionResult,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.0,
                     service_name="kg_resolve"
                 )
-                if not content:
-                    continue
-                
-                content = self.llm._clean_json_output(content)
-                data = json.loads(content)
-                merge_groups = data.get("merge_groups", [])
 
-                if not merge_groups:
+                if not result.merge_groups:
                     logger.info(f"[{entity_type}] No duplicates found.")
                     continue
 
-                logger.info(f"[{entity_type}] Found {len(merge_groups)} merge group(s):")
-                for group in merge_groups:
-                    canonical = group["canonical_name"]
-                    aliases = group["aliases"]
-                    reason = group.get("reason", "")
+                logger.info(f"[{entity_type}] Found {len(result.merge_groups)} merge group(s):")
+                for group in result.merge_groups:
+                    canonical = group.canonical_name
+                    aliases = group.aliases
+                    reason = group.reason
                     logger.info(f"  → '{canonical}' ← {aliases}  ({reason})")
 
                     # Find UIDs for canonical and aliases

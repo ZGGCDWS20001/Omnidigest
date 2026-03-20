@@ -47,38 +47,39 @@ def test_breaking_push(args):
     """
     CLI handler to send a test breaking news notification to specified platforms.
     CLI 处理器，用于向指定平台发送测试性的突发新闻通知。
-    
+
     Args:
         args (argparse.Namespace): Arguments containing 'platform' (dingtalk/telegram/all). / 包含 'platform'（钉钉/电报/全部）的参数。
     """
     override_db_settings(args)
     from src.omnidigest.notifications.pusher import NotificationService
-    
+
     db = DatabaseManager()
     events = db.get_recent_breaking_events(hours=48)
     if not events:
         print("No breaking events found in DB to test.")
         return
-        
+
     event = events[0]
     platform = args.platform.lower()
-    
+
     print(f"Manually pushing {platform.upper()} event: {event['event_title']}")
-    
+
     # Fetch actual source URLs from the database
     source_urls = db.get_breaking_event_sources(event['id'])
-    
+
     payload = {"event": event}
     payload["event"]["source_urls"] = source_urls
-    
+
     pusher = NotificationService()
-    
+
     if platform in ['dingtalk', 'all']:
         title = f"🔴突发新闻: {event['event_title']}"
         pusher.push_to_dingtalk(title, payload, event_type="breaking")
         print("✅ DingTalk push complete.")
-        
+
     if platform in ['tg', 'telegram', 'all']:
         tg_html = pusher.render_template('telegram_breaking.html.j2', payload)
         pusher.send_telegram(tg_html)
         print("✅ Telegram push complete.")
+
