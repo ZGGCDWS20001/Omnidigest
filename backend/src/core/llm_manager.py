@@ -24,14 +24,25 @@ class LLMManager:
         """
         Initializes the LLMManager with a database connection and sets up internal state.
         使用数据库连接初始化 LLMManager 并设置内部状态。
-        
+
         Args:
             db (DatabaseManager): The database manager instance for model fetching. / 用于获取模型的数据库管理器实例。
         """
         self.db = db
         self._current_model = None
         self._client = None
+        self._http_client = None
         self._lock = asyncio.Lock()
+
+    async def close(self):
+        """
+        Closes the underlying HTTP client to release connections.
+        关闭底层 HTTP 客户端以释放连接。
+        """
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
+            self._client = None
 
     async def _refresh_client(self, exclude_ids=None):
         """
@@ -59,8 +70,13 @@ class LLMManager:
                 model['id'] = str(model['id'])
 
         logger.info(f"Switching to LLM Model: {model.get('name')} ({model.get('model_name')})")
-        
+
+        # Close old client before creating new one to prevent connection leaks
+        if self._http_client:
+            await self._http_client.aclose()
+
         http_client = AsyncClient(timeout=Timeout(60.0, connect=10.0))
+        self._http_client = http_client
         # Keep native AsyncOpenAI client as default to not break unstructured calls
         self._client = AsyncOpenAI(
             api_key=model['api_key'],

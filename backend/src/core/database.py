@@ -16,8 +16,8 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 # Connection pool configuration / 连接池配置
-DEFAULT_MIN_CONN = 2
-DEFAULT_MAX_CONN = 50  # Increased from 20 to handle more concurrent requests
+DEFAULT_MIN_CONN = 10
+DEFAULT_MAX_CONN = 2000  # Increased to handle high concurrent requests
 CONNECTION_TIMEOUT = 10  # seconds
 IDLE_CONNECTION_THRESHOLD = 300  # seconds - warn if connection idle for too long
 
