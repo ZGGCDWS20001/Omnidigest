@@ -579,17 +579,17 @@ def setup_scheduler():
         scheduler.add_job(
             run_processor_loop,
             'interval',
-            seconds=30,  # Changed from 5 minutes to 30 seconds for faster processing
+            seconds=60,  # 60 seconds to allow enough time for LLM processing
             id='breaking_processor_loop',
             max_instances=2,  # Allow 2 concurrent instances in case processing takes longer than interval
             next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=5)
         )
 
-        # 3. Breaking Alerter (Runs every 30 seconds)
-        # 突发新闻告警（每30秒运行一次）
+        # 3. Breaking Alerter (Runs every 60 seconds)
+        # 突发新闻告警（每60秒运行一次）
         async def run_alerter_loop():
             try:
-                await breaking_alerter.run_alerter_loop(interval_seconds=30)
+                await breaking_alerter.run_alerter_loop(interval_seconds=60)
             except Exception as e:
                 logger.error(f"Breaking alerter loop error: {e}", exc_info=True)
                 raise
@@ -597,7 +597,7 @@ def setup_scheduler():
         scheduler.add_job(
             run_alerter_loop,
             'interval',
-            seconds=30,  # Changed from 5 minutes to 30 seconds
+            seconds=60,  # 60 seconds interval
             id='breaking_alerter_loop',
             max_instances=2,  # Allow 2 concurrent instances in case check takes longer than interval
             next_run_time=datetime.datetime.now() + timedelta(seconds=10)
