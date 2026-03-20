@@ -1,5 +1,5 @@
 """
-LLM Management Service. 
+LLM Management Service.
 Handles dynamic selection of LLM models from the database and automatic failover.
 LLM 管理服务。处理从数据库动态选择 LLM 模型以及自动故障转移。
 """
@@ -7,6 +7,7 @@ import logging
 import asyncio
 import json
 import re
+import threading
 import instructor
 from openai import AsyncOpenAI
 from httpx import AsyncClient, Timeout
@@ -32,7 +33,7 @@ class LLMManager:
         self._current_model = None
         self._client = None
         self._http_client = None
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
     async def close(self):
         """
@@ -125,7 +126,7 @@ class LLMManager:
         Returns the current client and model metadata. Refreshes if needed or if current is excluded.
         返回当前的客户端和模型元数据。如果需要或当前模型被排除，则刷新。
         """
-        async with self._lock:
+        with self._lock:
             # Refresh if no client exists OR if the current model is in exclude_ids
             if not self._client or (self._current_model and str(self._current_model.get('id')) in (exclude_ids or [])):
                 await self._refresh_client(exclude_ids=exclude_ids)
@@ -219,7 +220,7 @@ class LLMManager:
                     excluded_ids.add(str(model_id))
                 
                 # Invalidate client and model to force a switch on next attempt
-                async with self._lock:
+                with self._lock:
                     self._client = None
                     self._current_model = None
                 
@@ -301,7 +302,7 @@ class LLMManager:
                     excluded_ids.add(str(model_id))
                 
                 # Invalidate client and model to force a switch on next attempt
-                async with self._lock:
+                with self._lock:
                     self._client = None
                     self._current_model = None
                 
