@@ -581,6 +581,7 @@ def setup_scheduler():
             'interval',
             seconds=30,  # Changed from 5 minutes to 30 seconds for faster processing
             id='breaking_processor_loop',
+            max_instances=2,  # Allow 2 concurrent instances in case processing takes longer than interval
             next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=5)
         )
 
@@ -598,6 +599,7 @@ def setup_scheduler():
             'interval',
             seconds=30,  # Changed from 5 minutes to 30 seconds
             id='breaking_alerter_loop',
+            max_instances=2,  # Allow 2 concurrent instances in case check takes longer than interval
             next_run_time=datetime.datetime.now() + timedelta(seconds=10)
         )
 

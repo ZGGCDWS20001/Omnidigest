@@ -97,11 +97,8 @@ class BreakingAlerter:
 
     async def run_alerter_loop(self, interval_seconds: int = 60):
         """
-        Runs the alerter as a continuous background loop.
-        将警报器作为连续后台循环运行。
+        Runs a single alert check cycle. Scheduler manages the loop timing.
+        运行单次告警检查周期。调度器管理循环时间。
         """
-        logger.info(f"Breaking Alerter started. Threshold: {self.threshold}, Interval: {interval_seconds}s")
-        while True:
-            await asyncio.to_thread(self.check_and_push)
-            # Sleep until next check
-            await asyncio.sleep(interval_seconds)
+        logger.debug(f"Breaking Alerter check cycle. Threshold: {self.threshold}, Interval: {interval_seconds}s")
+        await asyncio.to_thread(self.check_and_push)
