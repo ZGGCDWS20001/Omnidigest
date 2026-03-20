@@ -197,7 +197,7 @@ export default {
   components: {
     Line,
     Pie
-  }
+  },
   name: 'TokenStats',
   setup() {
     const loading = ref(true)
